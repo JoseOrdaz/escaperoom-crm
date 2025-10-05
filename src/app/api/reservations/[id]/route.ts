@@ -14,6 +14,64 @@ const toDateAtLocal = (ymd: string, hhmm = "00:00") =>
   new Date(`${ymd}T${hhmm}:00`);
 const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
 
+/* GET obtener una reserva por ID */
+export async function GET(req: Request, { params }: { params: { id: string } }) {
+  try {
+    const _id = safeObjectId(params.id);
+    if (!_id) {
+      return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
+    }
+
+    const db = await connectDB();
+    const doc = await db.collection("reservations").findOne({ _id });
+
+    if (!doc) {
+      return NextResponse.json({ ok: false, error: "Reserva no encontrada" }, { status: 404 });
+    }
+
+    // Obtener datos del cliente (si existe)
+    let customer = null;
+    if (doc.customerId) {
+      const c = await db
+        .collection("customers")
+        .findOne(
+          { _id: doc.customerId },
+          { projection: { _id: 1, name: 1, email: 1, phone: 1 } }
+        );
+      if (c) {
+        customer = {
+          id: String(c._id),
+          name: c.name ?? "",
+          email: c.email ?? "",
+          phone: c.phone ?? "",
+        };
+      }
+    }
+
+    return NextResponse.json({
+      _id: String(doc._id),
+      roomId: String(doc.roomId),
+      roomName: doc.roomName ?? "",
+      start: doc.start?.toISOString?.() ?? "",
+      end: doc.end?.toISOString?.() ?? "",
+      players: doc.players ?? 0,
+      price: doc.price ?? 0,
+      language: doc.language ?? "es",
+      // description: doc.description ?? "",
+      notes: typeof doc.notes === "string" ? doc.notes : "",
+      internalNotes: typeof doc.internalNotes === "string" ? doc.internalNotes : "",
+      customer,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "Error" },
+      { status: 500 }
+    );
+  }
+}
+
+
+
 /* PATCH editar reserva */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
@@ -59,9 +117,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       players: body.players,
       price,
       language: body.language ?? "es",
-      description: body.description ?? "",
+      // description: body.description ?? "",
       notes: body.notes ?? "",
+      internalNotes: body.internalNotes ?? "",
       updatedAt: new Date(),
+      status: body.status ?? "pendiente",
     };
 
     // 🔹 Cliente

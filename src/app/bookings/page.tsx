@@ -34,6 +34,7 @@ type Room = {
   capacityMax: number;
   priceTable: { players: number; price: number }[];
   durationMinutes?: number;
+  schedule?: any;
 };
 type Reservation = { start: string; end: string; players: number };
 
@@ -50,11 +51,17 @@ const schema = z.object({
 });
 type ClientFormValues = z.infer<typeof schema>;
 
-export default function BookingWizard() {
+export default function BookingWizard({
+  roomsProp,
+  roomIds,
+}: {
+  roomsProp?: Room[];
+  roomIds: string[];
+}) {
   const [step, setStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
 
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [rooms, setRooms] = useState<Room[]>(roomsProp || []);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [players, setPlayers] = useState<number | null>(null);
   const [date, setDate] = useState<Date | null>(null);
@@ -62,11 +69,10 @@ export default function BookingWizard() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null);
 
-  /* ───────── Helpers: obtener slots dinámicos ───────── */
+  /* ───────── Helpers ───────── */
   function getSlotsForDate(room: Room, date: Date) {
     if (!room?.schedule) return [];
     const ymd = date.toLocaleDateString("sv-SE");
-
     const weekday = [
       "sunday",
       "monday",
@@ -77,22 +83,13 @@ export default function BookingWizard() {
       "saturday",
     ][date.getDay()] as keyof Room["schedule"]["template"];
 
-    // 1️⃣ Si el día está en daysOff → no hay slots
-    if (room.schedule.daysOff.some((d) => d.date === ymd)) {
-      return [];
-    }
-
-    // 2️⃣ Si hay override → usarlo
-    const override = room.schedule.overrides.find((o) => o.date === ymd);
+    if (room.schedule.daysOff?.some((d: any) => d.date === ymd)) return [];
+    const override = room.schedule.overrides?.find((o: any) => o.date === ymd);
     if (override) return override.slots;
-
-    // 3️⃣ Si no → usar el template base del día
-    return room.schedule.template[weekday] || [];
+    return room.schedule.template?.[weekday] || [];
   }
 
-
-
-
+  /* ───────── Form ───────── */
   const form = useForm<ClientFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -112,13 +109,11 @@ export default function BookingWizard() {
     );
     setStep(next);
   };
-
   const goToStep = (targetStep: number) => {
     if (targetStep < step || completedSteps.includes(targetStep)) {
       setStep(targetStep);
     }
   };
-
   const resetWizard = () => {
     setStep(1);
     setCompletedSteps([]);
@@ -130,13 +125,26 @@ export default function BookingWizard() {
     form.reset();
   };
 
-  /* ───────── Cargar salas ───────── */
+  /* ───────── Cargar salas (solo si no vienen por props) ───────── */
   useEffect(() => {
-    fetch("/api/rooms")
-      .then((r) => r.json())
-      .then(setRooms)
-      .catch(() => toast.error("Error cargando salas"));
-  }, []);
+  if (roomsProp && roomsProp.length > 0) {
+    setRooms(roomsProp);
+    return;
+  }
+
+  fetch("/api/rooms")
+    .then((r) => r.json())
+    .then((allRooms) => {
+      if (roomIds && roomIds.length > 0) {
+        const filtered = allRooms.filter((r: Room) => roomIds.includes(r._id));
+        setRooms(filtered);
+      } else {
+        setRooms(allRooms);
+      }
+    })
+    .catch(() => toast.error("Error cargando salas"));
+}, [roomsProp, roomIds]);
+
 
   /* ───────── Cargar reservas ───────── */
   useEffect(() => {
@@ -176,46 +184,26 @@ export default function BookingWizard() {
     return map;
   }, [reservations]);
 
-
   const selectedRoom = rooms.find((r) => r._id === roomId);
 
-  /* ───────── Colores calendario ───────── */
+  /* ───────── Estado del día ───────── */
   const getDayStatus = (d: Date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (d < today) return "disabled";
     if (!selectedRoom) return "green";
-
     const ymd = d.toLocaleDateString("sv-SE");
     const slots = getSlotsForDate(selectedRoom, d);
-    if (slots.length === 0) return "red"; // cerrado o festivo
-
+    if (slots.length === 0) return "red";
     const reservedHours = reservationsByDay[ymd] || [];
     const total = slots.length;
-    const reservedCount = slots.filter((s) =>
+    const reservedCount = slots.filter((s: any) =>
       reservedHours.some((r) => overlaps(r.start, r.end, s.start, s.end))
     ).length;
-
-
     if (reservedCount === 0) return "green";
     if (reservedCount < total) return "yellow";
     return "red";
   };
-
-
-  /* ───────── Breadcrumb ───────── */
-  const steps = [
-    { label: "Sala", info: roomId ? selectedRoom?.name : "" },
-    { label: "Jugadores", info: players ? `${players}` : "" },
-    { label: "Fecha y hora", info: date ? `${date.toLocaleDateString()} ${slot || ""}` : "" },
-    {
-      label: "Datos",
-      info: form.getValues("firstName")
-        ? `${form.getValues("firstName")} ${form.getValues("lastName")}`
-        : "",
-    },
-    { label: "Confirmación", info: "" },
-  ];
 
   /* ───────── Confirmar reserva ───────── */
   const onSubmit = async (values: ClientFormValues) => {
@@ -225,7 +213,7 @@ export default function BookingWizard() {
         throw new Error("Datos incompletos");
 
       const start = slot;
-      const localYMD = date.toLocaleDateString("sv-SE"); // ✅ mantiene zona local
+      const localYMD = date.toLocaleDateString("sv-SE");
       const startDate = new Date(`${localYMD}T${start}`);
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + (selectedRoom?.durationMinutes ?? 120));
@@ -241,14 +229,13 @@ export default function BookingWizard() {
           end,
           players,
           language: "es",
-          description: "Reserva web",
+          // description: "",
           notes: values.notes,
           customerName: `${values.firstName} ${values.lastName}`.trim(),
           customerEmail: values.email,
           customerPhone: values.phone,
         }),
       });
-
 
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || "Error al crear reserva");
@@ -273,28 +260,13 @@ export default function BookingWizard() {
         description: json?._id ? `Localizador #${json._id}` : undefined,
       });
 
-      await fetch(`/api/reservations?roomId=${roomId}`)
-      .then((r) => r.json())
-      .then((json) =>
-        setReservations(Array.isArray(json) ? json : json.items ?? [])
-      )
-      .catch(() => toast.error("Error actualizando reservas"));
-
-
       goNext(5);
-
-      setTimeout(() => {
-        confetti({ particleCount: 120, spread: 90, origin: { y: 0.6 } });
-      }, 500);
+      setTimeout(() => confetti({ particleCount: 120, spread: 90, origin: { y: 0.6 } }), 500);
     } catch (e: any) {
-      toast.error("No se pudo crear la reserva", {
-        id: t,
-        description: e.message || String(e),
-      });
+      toast.error("No se pudo crear la reserva", { id: t, description: e.message });
     }
   };
 
-  // Compara si dos intervalos horarios (HH:mm) se solapan
   function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string) {
     const toMin = (s: string) => {
       const [h, m] = s.split(":").map(Number);
@@ -304,13 +276,25 @@ export default function BookingWizard() {
     const ae = toMin(aEnd);
     const bs = toMin(bStart);
     const be = toMin(bEnd);
-    return as < be && ae > bs; // se solapan
+    return as < be && ae > bs;
   }
 
+  /* ───────── Breadcrumb ───────── */
+  const steps = [
+    { label: "Sala", info: roomId ? selectedRoom?.name : "" },
+    { label: "Jugadores", info: players ? `${players}` : "" },
+    { label: "Fecha y hora", info: date ? `${date.toLocaleDateString()} ${slot || ""}` : "" },
+    {
+      label: "Datos",
+      info: form.getValues("firstName")
+        ? `${form.getValues("firstName")} ${form.getValues("lastName")}`
+        : "",
+    },
+    { label: "Confirmación", info: "" },
+  ];
 
   return (
     <div className="mx-auto max-w-6xl p-6 flex gap-8">
-      {/* Breadcrumb */}
       {step < 5 && (
         <div className="w-64">
           <ul className="space-y-4">
@@ -318,7 +302,6 @@ export default function BookingWizard() {
               const index = i + 1;
               const active = step === index;
               const done = completedSteps.includes(index);
-
               return (
                 <li
                   key={s.label}
@@ -326,8 +309,7 @@ export default function BookingWizard() {
                   className={cn(
                     "flex flex-col border-l-2 pl-3 transition-colors cursor-pointer",
                     active && "border-primary text-primary font-semibold",
-                    done &&
-                    "border-green-500 text-green-600 hover:text-primary"
+                    done && "border-green-500 text-green-600 hover:text-primary"
                   )}
                 >
                   <div className="flex items-center gap-2">
@@ -341,9 +323,7 @@ export default function BookingWizard() {
                     <span>{s.label}</span>
                   </div>
                   {s.info && (
-                    <span className="ml-7 text-xs text-muted-foreground truncate">
-                      {s.info}
-                    </span>
+                    <span className="ml-7 text-xs text-muted-foreground truncate">{s.info}</span>
                   )}
                 </li>
               );
@@ -363,7 +343,7 @@ export default function BookingWizard() {
             {step === 1 && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <h2 className="font-bold text-lg">Selecciona una sala</h2>
-                <div className="grid sm:grid-cols-2 gap-4 mt-4">
+                <div className="grid sm:grid-cols-3 gap-4 mt-4">
                   {rooms.map((r) => (
                     <Card
                       key={r._id}
@@ -375,11 +355,7 @@ export default function BookingWizard() {
                     >
                       <CardContent className="p-4">
                         {r.imageUrl && (
-                          <img
-                            src={r.imageUrl}
-                            alt={r.name}
-                            className="rounded-md mb-2"
-                          />
+                          <img src={r.imageUrl} alt={r.name} className="rounded-md mb-2" />
                         )}
                         <p className="font-medium">{r.name}</p>
                         <p className="text-sm text-muted-foreground">
@@ -415,12 +391,10 @@ export default function BookingWizard() {
               </motion.div>
             )}
 
-            {/* Paso 3: Fecha + Hora */}
-            {step === 3 && (
-              <motion.div initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
+            {/* Paso 3: Fecha y hora */}
+            {step === 3 && selectedRoom && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <h2 className="font-bold text-lg mb-4 text-center">Elige fecha y hora</h2>
-
-                {/* Calendario estilizado */}
                 <div className="max-w-md mx-auto">
                   <Calendar
                     mode="single"
@@ -442,7 +416,6 @@ export default function BookingWizard() {
                   />
                 </div>
 
-                {/* Leyenda */}
                 <div className="flex justify-center gap-6 mt-4 text-sm">
                   <div className="flex items-center gap-1">
                     <span className="w-4 h-4 bg-green-200 rounded" /> Verde: todas disponibles
@@ -455,19 +428,16 @@ export default function BookingWizard() {
                   </div>
                 </div>
 
-                {/* Horas */}
-                {date && selectedRoom && (
+                {date && (
                   <div className="mt-6 max-w-lg mx-auto">
                     <h3 className="font-medium mb-2">Selecciona una hora:</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {getSlotsForDate(selectedRoom, date).map((slot) => {
+                      {getSlotsForDate(selectedRoom, date).map((slot: any) => {
                         const start = slot.start;
                         const dayStr = date.toLocaleDateString("sv-SE");
                         const reserved = (reservationsByDay[dayStr] || []).some((r) =>
                           overlaps(r.start, r.end, slot.start, slot.end)
                         );
-
-
                         return (
                           <Button
                             key={start}
@@ -487,13 +457,12 @@ export default function BookingWizard() {
                     </div>
                   </div>
                 )}
-
               </motion.div>
             )}
 
-            {/* Paso 4: Datos cliente */}
+            {/* Paso 4: Datos */}
             {step === 4 && (
-              <motion.div initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 <h2 className="font-bold text-lg mb-4">Tus datos</h2>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -550,7 +519,7 @@ export default function BookingWizard() {
                       name="notes"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Notas</FormLabel>
+                          <FormLabel>¿Son adultos o menores?, ¿Cuántos años tienen los menores?, ¿Es para un evento?, etc...</FormLabel>
                           <FormControl><Textarea rows={3} {...field} /></FormControl>
                           <FormMessage />
                         </FormItem>
@@ -587,7 +556,7 @@ export default function BookingWizard() {
 
             {/* Paso 5: Confirmación */}
             {step === 5 && confirmedReservation && (
-              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+              <motion.div initial={{ opacity: 0.9 }} animate={{ opacity: 1 }}>
                 <h2 className="text-center text-2xl font-bold text-green-600">
                   🎉 ¡Reserva confirmada!
                 </h2>

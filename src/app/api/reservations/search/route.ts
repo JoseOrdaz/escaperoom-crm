@@ -48,7 +48,7 @@ export async function GET(req: Request) {
 
   filter.$or = [
     { notes:       { $regex: q, $options: "i" } },
-    { description: { $regex: q, $options: "i" } },
+    // { description: { $regex: q, $options: "i" } },
     { roomName:    { $regex: q, $options: "i" } },
     ...(custIds.length ? [{ customerId: { $in: custIds } }] : []),
   ];
@@ -74,7 +74,7 @@ export async function GET(req: Request) {
       language: d.language ?? "es",
       customer: d.customer ?? { name: "", email: "" },
       extraInfo: d.notes ?? "",
-      description: d.description ?? "",
+      // description: d.description ?? "",
     }));
 
     return NextResponse.json({ items, total, page, pageSize });

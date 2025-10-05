@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Clock, CheckCircle, XCircle } from "lucide-react";
+
 import {
   Plus,
   ChevronLeft,
@@ -32,8 +34,12 @@ type Resv = {
   customer: { name: string; email: string; phone?: string };
   language: "es" | "en" | "ru";
   notes?: string;
+  internalNotes?: string;
   description?: string;
-  extraInfo?: string;
+  status?: "pendiente" | "confirmada" | "cancelada";
+
+
+  
 };
 
 /* ───────── Helpers ───────── */
@@ -179,8 +185,9 @@ export function ReservationsCalendar({
     end: ev.end,
     players: ev.players,
     language: ev.language,
-    description: ev.description,
-    notes: ev.notes ?? ev.extraInfo,
+    notes: ev.notes ?? "",
+    internalNotes: ev.internalNotes ?? "",
+    status: ev.status ?? "pendiente",
     customer: ev.customer
       ? {
           id: ev.customer.email,   // 👈 clave para que lo encuentre
@@ -383,8 +390,29 @@ export function ReservationsCalendar({
                           <span>{ev.language.toUpperCase()}</span>
                         </div>
                         <div className="text-sm font-medium">
-                          {ev.roomName || "Sala"} · {ev.players} jugadores
-                        </div>
+                            {ev.roomName || "Sala"} · {ev.players} jugadores
+                          </div>
+                          <div className="flex items-center gap-1 text-xs mt-1">
+                              {ev.status === "pendiente" && (
+                                <>
+                                  <Clock className="w-3 h-3 text-yellow-600" />
+                                  <span className="text-yellow-700">Pendiente</span>
+                                </>
+                              )}
+                              {ev.status === "confirmada" && (
+                                <>
+                                  <CheckCircle className="w-3 h-3 text-green-600" />
+                                  <span className="text-green-700">Confirmada</span>
+                                </>
+                              )}
+                              {ev.status === "cancelada" && (
+                                <>
+                                  <XCircle className="w-3 h-3 text-red-600" />
+                                  <span className="text-red-700">Cancelada</span>
+                                </>
+                              )}
+                          </div>
+
                         {ev.customer && (
                           <div className="text-xs mt-1">
                             👤 {ev.customer.name} · {ev.customer.email}

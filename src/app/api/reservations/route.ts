@@ -27,8 +27,11 @@ const postSchema = z.object({
   customerEmail: z.string().email().optional(),
   customerPhone: z.string().optional(),
   language: z.enum(["es", "en", "ru"]).default("es"),
-  description: z.string().max(140).optional().default(""),
+  // description: z.string().max(140).optional().default(""),
   notes: z.string().max(1000).optional().default(""),
+  internalNotes: z.string().max(1000).optional().default(""),
+  status: z.enum(["pendiente", "confirmada", "cancelada"]).default("pendiente"),
+
 });
 
 /* ───────── GET ───────── */
@@ -79,8 +82,9 @@ export async function GET(req: Request) {
           players: d.players,
           price: d.price ?? 0,
           language: d.language ?? "es",
-          description: d.description ?? "",
+          // description: d.description ?? "",
           notes: d.notes ?? "",
+          internalNotes: d.internalNotes ?? "",
         }))
       );
     }
@@ -152,8 +156,10 @@ export async function GET(req: Request) {
         players: d.players,
         price: d.price ?? 0,
         language: d.language ?? "es",
-        description: d.description ?? "",
+        // description: d.description ?? "",
         notes: d.notes ?? "",
+        internalNotes: d.internalNotes ?? "",
+        status: d.status ?? "pendiente",
         customer: cust
           ? {
               id: String(cust._id),
@@ -275,11 +281,13 @@ export async function POST(req: Request) {
       players: v.players,
       price,
       language: v.language,
-      description: v.description,
+      // description: v.description,
       notes: v.notes,
+      internalNotes: v.internalNotes ?? "",
       ...(customerId ? { customerId } : {}),
       createdAt: new Date(),
       updatedAt: new Date(),
+      status: v.status,
     };
 
     const res = await db.collection("reservations").insertOne(doc);

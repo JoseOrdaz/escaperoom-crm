@@ -21,6 +21,9 @@ import ReservationModal, {
   Room,
 } from "@/components/reservations/reservation-modal";
 
+import { Clock, CheckCircle, XCircle } from "lucide-react";
+
+
 const ALL = "__all__";
 
 type Resv = {
@@ -33,8 +36,10 @@ type Resv = {
   price: number;
   language: "es" | "en" | "ru";
   customer?: { name?: string; email?: string; phone?: string };
-  description?: string;
-  extraInfo?: string;
+  // description?: string;
+  notes?: string;
+  internalNotes?: string;
+  status?: "pendiente" | "confirmada" | "cancelada";
 };
 
 const eur = (n: number) =>
@@ -130,8 +135,10 @@ export default function ReservationsTable() {
       end: r.end,
       players: r.players,
       language: r.language,
-      description: r.description,
-      notes: r.extraInfo,
+      // description: r.description,
+      notes: r.notes,
+      internalNotes: r.internalNotes,
+      status: r.status ?? "pendiente",
       customer: r.customer
         ? {
           name: r.customer.name,
@@ -257,6 +264,7 @@ export default function ReservationsTable() {
                   <th className="p-2 text-left">Precio</th>
                   <th className="p-2 text-left">Idioma</th>
                   <th className="p-2 text-left">Cliente</th>
+                  <th className="p-2 text-left">Estado</th>
                   <th className="p-2 text-right">Acciones</th>
                 </tr>
               </thead>
@@ -305,6 +313,24 @@ export default function ReservationsTable() {
                         {r.customer?.name ?? ""}{" "}
                         {r.customer?.email ? `· ${r.customer.email}` : ""}
                       </td>
+                      <td className="p-2">
+                        {r.status === "pendiente" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-medium">
+                            <Clock className="w-3 h-3 text-yellow-600" /> Pendiente
+                          </span>
+                        )}
+                        {r.status === "confirmada" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-medium">
+                            <CheckCircle className="w-3 h-3 text-green-600" /> Confirmada
+                          </span>
+                        )}
+                        {r.status === "cancelada" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-800 text-xs font-medium">
+                            <XCircle className="w-3 h-3 text-red-600" /> Cancelada
+                          </span>
+                        )}
+                      </td>
+
                       <td className="p-2 text-right">
                         <Button
                           size="sm"

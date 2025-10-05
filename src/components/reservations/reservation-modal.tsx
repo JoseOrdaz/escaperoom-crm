@@ -14,9 +14,14 @@ import {
 import {
   Form, FormField, FormItem, FormLabel, FormMessage, FormControl, FormDescription,
 } from "@/components/ui/form";
+import { Calendar } from "@/components/ui/calendar";
 import { z } from "zod";
+import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+
+import { Clock, CheckCircle, XCircle } from "lucide-react";
+
 
 /* ============ Tipos ============ */
 type TimeSlot = { start: string; end: string };
@@ -25,10 +30,17 @@ type WeekTemplate = {
   thursday: TimeSlot[]; friday: TimeSlot[]; saturday: TimeSlot[]; sunday: TimeSlot[];
 };
 type Room = {
-  _id: string; name: string; durationMinutes: number;
-  capacityMin: number; capacityMax: number;
+  _id: string;
+  name: string;
+  durationMinutes: number;
+  capacityMin: number;
+  capacityMax: number;
   priceTable: { players: number; price: number }[];
-  schedule: { template: WeekTemplate; daysOff: { date: string }[]; overrides: { date: string; slots: TimeSlot[] }[] };
+  schedule: {
+    template: WeekTemplate;
+    daysOff: { date: string }[];
+    overrides: { date: string; slots: TimeSlot[] }[];
+  };
 };
 type Customer = { _id: string; name: string; email: string; phone?: string };
 
@@ -39,560 +51,656 @@ export type ReservationForEdit = {
   end: string;
   players: number;
   language: "es" | "en" | "ru";
-  description?: string;
+  // description?: string;
   notes?: string;
+  internalNotes?: string;
+  status?: "pendiente" | "confirmada" | "cancelada";
   customer?: { id?: string; name?: string; email?: string; phone?: string };
 };
 
-type Props = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  mode: "create" | "edit";
-  title?: string;
-  reservation?: ReservationForEdit | null;
-  onSaved?: (updatedId: string) => void | Promise<void>;
-  rooms?: Room[];
-};
+
+
 
 /* ================= Helpers ================= */
 const HHMM = /^\d{2}:\d{2}$/;
 const pad = (n: number) => String(n).padStart(2, "0");
-const hhmmFromISO = (iso: string) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-const ymdFromISO = (iso: string) => new Date(iso).toISOString().slice(0, 10);
-const dayKeys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+const hhmmFromISO = (iso: string) => {
+  const d = new Date(iso);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) => {
+  const toMin = (s: string) => {
+    const [h, m] = s.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const as = toMin(aStart), ae = toMin(aEnd), bs = toMin(bStart), be = toMin(bEnd);
+  return as < be && ae > bs;
+};
 
 function normSlots(a?: TimeSlot[] | null) {
-  return (Array.isArray(a) ? a : []).filter(s => HHMM.test(s.start) && HHMM.test(s.end) && s.start < s.end);
+  return (Array.isArray(a) ? a : []).filter(
+    (s) => HHMM.test(s.start) && HHMM.test(s.end) && s.start < s.end
+  );
 }
-function getDayKeyFromDate(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  return dayKeys[d.getDay()];
+function getDayKeyFromDate(date: Date) {
+  const days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
+  return days[date.getDay()];
 }
-function getSlotsForDate(room: Room, dateStr: string): TimeSlot[] {
+function getSlotsForDate(room: Room, date: Date): TimeSlot[] {
+  const ymd = date.toLocaleDateString("sv-SE");
   const schedule = room.schedule ?? {};
-  if (schedule.daysOff?.some(d => d?.date === dateStr)) return [];
-  const ov = schedule.overrides?.find(o => o?.date === dateStr);
+  if (schedule.daysOff?.some((d) => d?.date === ymd)) return [];
+  const ov = schedule.overrides?.find((o) => o?.date === ymd);
   if (ov) return normSlots(ov.slots);
-  const key = getDayKeyFromDate(dateStr) as keyof WeekTemplate;
+  const key = getDayKeyFromDate(date) as keyof WeekTemplate;
   return normSlots(schedule?.template?.[key]);
 }
 function priceForPlayers(room: Room, players: number) {
   const row = room.priceTable?.find((p) => Number(p.players) === Number(players));
   return row ? Number(row.price) : 0;
 }
-const eur = (n: number) => new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+const eur = (n: number) =>
+  new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(n);
 
 /* ================= Schema ================= */
 const schema = z.object({
-  id: z.string().optional(),
   roomId: z.string().min(1, "Selecciona sala"),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
-  slot: z.string().regex(/^\d{2}:\d{2}-\d{2}:\d{2}(#\d+)?$/, "Franja inválida"),
-  players: z.coerce.number().int().min(1, "Selecciona jugadores"),
+  players: z
+    .union([
+      z.coerce.number().int().min(1, "Selecciona jugadores"),
+      z.undefined(),
+    ])
+    .refine((v) => v !== undefined && v > 0, "Selecciona número de jugadores"),
+
   language: z.enum(["es", "en", "ru"]).default("es"),
-  description: z.string().max(140).optional(),
-  notes: z.string().max(1000).optional(),
   customerSelectId: z.string().optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   email: z.string().optional(),
   phone: z.string().optional(),
-}).superRefine((data, ctx) => {
-  if (data.customerSelectId === "__new__") {
-    if (!data.firstName?.trim()) {
-      ctx.addIssue({ path: ["firstName"], code: "custom", message: "Nombre obligatorio" });
-    }
-    if (!data.lastName?.trim()) {
-      ctx.addIssue({ path: ["lastName"], code: "custom", message: "Apellidos obligatorios" });
-    }
-    if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
-      ctx.addIssue({ path: ["email"], code: "custom", message: "Email válido obligatorio" });
-    }
-  }
+  // description: z.string().max(140).optional(),
+  notes: z.string().max(1000).optional(),
+  internalNotes: z.string().max(1000).optional(),
+  status: z.enum(["pendiente", "confirmada", "cancelada"]).default("pendiente"),
+
 });
 type FormValues = z.infer<typeof schema>;
 
-/* ================= Componente ================= */
+/* ================= COMPONENT ================= */
 export default function ReservationModal({
-  open, onOpenChange, mode, reservation, onSaved, rooms: roomsProp,
-}: Props) {
-  /* Rooms */
+  open,
+  onOpenChange,
+  mode,
+  reservation,
+  onSaved,
+  rooms: roomsProp,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  mode: "create" | "edit";
+  reservation?: ReservationForEdit | null;
+  onSaved?: (id: string) => void;
+  rooms?: Room[];
+}) {
   const [roomsLocal, setRoomsLocal] = useState<Room[]>([]);
-  useEffect(() => {
-    if (roomsProp?.length) return;
-    (async () => {
-      try {
-        const res = await fetch("/api/rooms", { cache: "no-store" });
-        if (!res.ok) throw new Error(await res.text());
-        setRoomsLocal(await res.json());
-      } catch (e: any) {
-        toast.error("No se pudieron cargar salas", { description: String(e) });
-      }
-    })();
-  }, [roomsProp]);
-  const rooms = useMemo(() => roomsProp?.length ? roomsProp : roomsLocal, [roomsProp, roomsLocal]);
-
-  /* Customers */
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [reservations, setReservations] = useState<ReservationForEdit[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [slotOptions, setSlotOptions] = useState<Array<TimeSlot & { reserved?: boolean }>>([]);
+
+
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/customers", { cache: "no-store" });
-        const json = await res.json();
-        let items: Customer[] = json.items ?? [];
+  if (mode === "edit" && reservation) {
+    console.log("🟡 Editando reserva:", reservation);
+  }
+}, [reservation]);
 
-        if (
-          reservation?.customer &&
-          !items.find((c) =>
-            c._id === reservation.customer?.id ||
-            c.email === reservation.customer?.email
-          )
-        ) {
-          items = [
-            ...items,
-            {
-              _id: reservation.customer.id ?? reservation.customer.email,
-              name: reservation.customer.name ?? "",
-              email: reservation.customer.email ?? "",
-              phone: reservation.customer.phone ?? "",
-            },
-          ];
-        }
 
-        setCustomers(items);
-      } catch {
-        setCustomers([]);
-      }
-    })();
-  }, [reservation]);
-
-  /* Reservas del día */
-  const [dayReservations, setDayReservations] = useState<ReservationForEdit[]>([]);
-  const [occupiedSlots, setOccupiedSlots] = useState<Set<string>>(new Set());
-
-  /* Form */
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      id: "", roomId: "", date: new Date().toISOString().slice(0, 10),
-      slot: "", players: 1, language: "es", description: "", notes: "",
-      customerSelectId: "", firstName: "", lastName: "", email: "", phone: "",
-    },
-    mode: "onBlur",
+    defaultValues: { roomId: "", players: undefined, language: "es" },
   });
 
+
   const watchRoomId = form.watch("roomId");
-  const watchDate = form.watch("date");
   const watchPlayers = form.watch("players");
   const watchCustomer = form.watch("customerSelectId");
-  const selectedRoom = useMemo(() => rooms.find(r => r._id === watchRoomId), [rooms, watchRoomId]);
 
-  /* Cargar reservas cuando cambia sala o fecha */
+  const selectedRoom = useMemo(
+    () => (roomsProp ?? roomsLocal).find((r) => r._id === watchRoomId),
+    [roomsProp, roomsLocal, watchRoomId]
+  );
+
+  /* Cargar salas */
   useEffect(() => {
-    if (!watchDate || !watchRoomId) return;
+    if (roomsProp?.length) return;
+    fetch("/api/rooms")
+      .then((r) => r.json())
+      .then(setRoomsLocal)
+      .catch(() => toast.error("No se pudieron cargar salas"));
+  }, [roomsProp]);
 
-    const from = watchDate; // YYYY-MM-DD
-    const to = watchDate;   // YYYY-MM-DD
+  /* Cargar clientes */
+  useEffect(() => {
+    fetch("/api/customers")
+      .then((r) => r.json())
+      .then((j) => setCustomers(j.items ?? []))
+      .catch(() => setCustomers([]));
+  }, []);
 
-    console.log("📡 Fetching reservas:", { roomId: watchRoomId, from, to });
-
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/reservations?roomId=${watchRoomId}&from=${from}&to=${to}`,
-          { cache: "no-store" }
-        );
-        const json = await res.json();
-        // Mostramos en consola todas las reservas del día para esta sala
-        console.log("📅 Reservas existentes para", watchDate, "en sala", watchRoomId, ":", json.reservas ?? json);
-
-        // Mostramos también las franjas ocupadas calculadas
-        console.log("⛔ Franjas ocupadas:", json.franjasOcupadas ?? []);
-
-        setDayReservations(json.reservas ?? json ?? []);
-        setOccupiedSlots(new Set(json.franjasOcupadas ?? []));
-      } catch (e) {
-        console.error("Error cargando reservas del día", e);
-        setDayReservations([]);
-        setOccupiedSlots(new Set());
-      }
-    })();
-  }, [watchDate, watchRoomId]);
-
-  const playerOptions = useMemo(() => {
-    return (selectedRoom?.priceTable ?? [])
-      .slice().sort((a, b) => a.players - b.players)
-      .map(r => ({ players: r.players, label: `${r.players} (${eur(r.price)})` }));
-  }, [selectedRoom]);
-
-  /* Slots con flag reserved */
-  const [slotOptions, setSlotOptions] = useState<Array<TimeSlot & { _id: string; reserved?: boolean }>>([]);
+  /* Cargar reservas */
+  useEffect(() => {
+    if (!watchRoomId) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const toDate = new Date();
+    toDate.setDate(toDate.getDate() + 30);
+    const to = toDate.toISOString().slice(0, 10);
+    fetch(`/api/reservations?roomId=${watchRoomId}&from=${today}&to=${to}`)
+      .then((r) => r.json())
+      .then((json) => setReservations(json.reservas ?? json ?? []))
+      .catch(() => setReservations([]));
+  }, [watchRoomId]);
 
   useEffect(() => {
-    if (!selectedRoom || !watchDate) { setSlotOptions([]); form.setValue("slot", ""); return; }
-    const raw = getSlotsForDate(selectedRoom, watchDate);
+  if (!open) {
+    form.reset({ roomId: "", players: undefined, language: "es" });
+    setSelectedDate(null);
+    setSelectedSlot(null);
+    return;
+  }
 
-    const reservedSlots = occupiedSlots;
+  if (mode === "edit" && reservation) {
+    // Esperar a que los clientes estén cargados antes de resetear
+    if (!customers.length) return;
 
-    const withIds = raw.map((s, i) => {
-      const id = `${s.start}-${s.end}#${i}`;
-      const isReserved = reservedSlots.has(`${s.start}-${s.end}`);
-      return { ...s, _id: id, reserved: isReserved };
-    });
-
-    console.log("💡 Slots del día:", withIds);
-
-    setSlotOptions(withIds);
-
-    const current = form.getValues("slot");
-    const exists = withIds.some(s => s._id === current && !s.reserved);
-    form.setValue("slot", exists ? current : "");
-  }, [selectedRoom, watchDate, occupiedSlots]);
-
-  const computedPrice = useMemo(() => selectedRoom ? priceForPlayers(selectedRoom, Number(watchPlayers) || 0) : 0, [selectedRoom, watchPlayers]);
-
-  /* Reset modal */
-  useEffect(() => {
-    if (!open) {
-      form.reset({
-        id: "", roomId: "", date: new Date().toISOString().slice(0, 10),
-        slot: "", players: 1, language: "es", description: "", notes: "",
-        customerSelectId: "", firstName: "", lastName: "", email: "", phone: "",
-      });
-    }
-  }, [open]);
-
-  /* Prefill edición */
-  useEffect(() => {
-    if (!reservation || !open || mode !== "edit") return;
-
-    const date = ymdFromISO(reservation.start);
-    const start = hhmmFromISO(reservation.start);
-    const end = hhmmFromISO(reservation.end);
-    const r = rooms.find(rr => rr._id === reservation.roomId);
-
-    let slotId = "";
-    if (r) {
-      const raw = getSlotsForDate(r, date);
-      const withIds = raw.map((s, i) => ({ ...s, _id: `${s.start}-${s.end}#${i}` }));
-      setSlotOptions(withIds);
-      slotId = (withIds.find(s => s.start === start && s.end === end)?._id) ?? "";
-    }
-
-    const customerKey = reservation.customer?.id || reservation.customer?.email;
+    const foundCustomer = customers.find(
+      (c) =>
+        c._id === reservation.customer?.id ||
+        c.email === reservation.customer?.email
+    );
 
     form.reset({
-      id: reservation._id,
       roomId: reservation.roomId,
-      date,
-      slot: slotId,
       players: reservation.players,
-      language: reservation.language,
-      description: reservation.description ?? "",
-      notes: reservation.notes ?? "",
-      customerSelectId: customerKey,
-      firstName: "",
-      lastName: "",
-      email: reservation.customer?.email ?? "",
-      phone: reservation.customer?.phone ?? "",
+      language: reservation.language ?? "es",
+      customerSelectId: foundCustomer?._id ?? reservation.customer?.id ?? "",
+      notes: reservation.notes,
+      internalNotes: reservation.internalNotes ?? "",
+      status: reservation.status ?? "pendiente",
     });
-  }, [reservation, rooms, open, mode]);
 
-  /* Helpers */
-  function buildBody(values: FormValues, isEdit: boolean) {
-    const [startRaw, endPart] = String(values.slot).split("-");
-    const start = (startRaw ?? "").trim();
-    const end = (endPart ?? "").split("#")[0].trim();
+    const start = new Date(reservation.start);
+    setSelectedDate(start);
+    setSelectedSlot(
+      `${hhmmFromISO(reservation.start)}-${hhmmFromISO(reservation.end)}`
+    );
+  } else {
+    form.reset({ roomId: "", players: undefined, language: "es" });
+    setSelectedDate(null);
+    setSelectedSlot(null);
+  }
+}, [open, mode, reservation, form, customers]);
 
-    const body: any = {
-      roomId: values.roomId,
-      date: values.date,
+
+
+  const reservationsByDay = useMemo(() => {
+    const map: Record<string, { start: string; end: string }[]> = {};
+    reservations.forEach((r) => {
+      const d = new Date(r.start);
+      const day = d.toLocaleDateString("sv-SE");
+      const start = hhmmFromISO(r.start);
+      const end = hhmmFromISO(r.end);
+      if (!map[day]) map[day] = [];
+      map[day].push({ start, end });
+    });
+    return map;
+  }, [reservations]);
+
+  const getDayStatus = (d: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (d < today) return "disabled";
+    if (!selectedRoom) return "green";
+    const ymd = d.toLocaleDateString("sv-SE");
+    const slots = getSlotsForDate(selectedRoom, d);
+    if (slots.length === 0) return "red";
+    const reserved = reservationsByDay[ymd] || [];
+    const reservedCount = slots.filter((s) =>
+      reserved.some((r) => overlaps(r.start, r.end, s.start, s.end))
+    ).length;
+    if (reservedCount === 0) return "green";
+    if (reservedCount < slots.length) return "yellow";
+    return "red";
+  };
+
+  /* Cargar franjas del día seleccionado */
+  useEffect(() => {
+    if (!selectedRoom || !selectedDate) return setSlotOptions([]);
+    const slots = getSlotsForDate(selectedRoom, selectedDate);
+    const ymd = selectedDate.toLocaleDateString("sv-SE");
+    const reserved = reservationsByDay[ymd] || [];
+    setSlotOptions(
+      slots.map((s) => ({
+        ...s,
+        reserved: reserved.some((r) => overlaps(r.start, r.end, s.start, s.end)),
+      }))
+    );
+  }, [selectedRoom, selectedDate, reservationsByDay]);
+
+  const computedPrice = useMemo(
+    () =>
+      selectedRoom
+        ? priceForPlayers(selectedRoom, Number(watchPlayers) || 0)
+        : 0,
+    [selectedRoom, watchPlayers]
+  );
+
+  /* === SUBMIT === */
+  async function submit(values: FormValues) {
+    if (!selectedRoom || !selectedDate || !selectedSlot)
+      return toast.error("Selecciona fecha y hora");
+
+    const [start, end] = selectedSlot.split("-");
+    const body: Record<string, any> = {
+      roomId: selectedRoom._id,
+      date: selectedDate.toLocaleDateString("sv-SE"),
       start,
       end,
       players: values.players,
       language: values.language,
-      description: values.description ?? "",
-      notes: values.notes ?? "",
+      // description: values.description,
+      notes: values.notes,
+      internalNotes: values.internalNotes,
+      status: values.status,
     };
 
     if (values.customerSelectId === "__new__") {
-      body.customerName = `${values.firstName} ${values.lastName}`.trim();
+      body.customerName = `${values.firstName ?? ""} ${values.lastName ?? ""}`.trim();
       body.customerEmail = values.email;
       body.customerPhone = values.phone;
     } else if (values.customerSelectId) {
-      const selected = customers.find(c => c.email === values.customerSelectId);
-      if (selected) body.customerId = selected._id;
+      const c = customers.find(
+        (x) =>
+          x._id === values.customerSelectId || x.email === values.customerSelectId
+      );
+      if (c) body.customerId = c._id;
     }
 
-    if (isEdit) body.updatedAt = new Date().toISOString();
-    return body;
-  }
-
-  async function submit(values: FormValues) {
-    const t = toast.loading(mode === "edit" ? "Guardando cambios…" : "Creando reserva…");
-    try {
-      const body = buildBody(values, mode === "edit");
-
-      // 👇 DEBUG: mostramos la info de la reserva que se va a crear/editar
-      console.log("📝 Reserva a enviar:", {
-        roomId: body.roomId,
-        date: body.date,
-        start: body.start,
-        end: body.end,
-        players: body.players,
-        language: body.language,
-        description: body.description,
-        notes: body.notes,
-        customerId: body.customerId,
-        customerName: body.customerName,
-        customerEmail: body.customerEmail,
-        customerPhone: body.customerPhone,
-      });
-
-      const url = mode === "edit"
-        ? `/api/reservations/${values.id}`
-        : "/api/reservations";
-      const method = mode === "edit" ? "PUT" : "POST";
-
-      const res = await fetch(url, {
-        method,
+    const res = await fetch(
+      mode === "edit"
+        ? `/api/reservations/${reservation?._id}` 
+        : "/api/reservations",
+      {
+        method: mode === "edit" ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+      }
+    );
+
+    const json = await res.json();
+    if (!res.ok)
+      return toast.error("Error al guardar reserva", {
+        description: json?.error,
       });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Error");
-
-      // 👇 DEBUG: mostramos la respuesta de la API
-      console.log("✅ Reserva guardada en BD:", json);
-
-      toast.success(mode === "edit" ? "Reserva actualizada" : "Reserva creada", { id: t });
-      onOpenChange(false);
-      if (onSaved) await onSaved(json._id ?? values.id ?? "");
-    } catch (e: any) {
-      toast.error("Error", { id: t, description: e?.message });
-    }
+    toast.success("Reserva guardada correctamente");
+    onOpenChange(false);
+    onSaved?.(json._id ?? "");
   }
-
-
-  const dialogTitle = mode === "edit" ? "Editar reserva" : "Crear nueva reserva";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{dialogTitle}</DialogTitle>
+          <DialogTitle>
+            {mode === "edit" ? "Editar reserva" : "Crear nueva reserva"}
+          </DialogTitle>
         </DialogHeader>
 
-        {/* Contenedor scrollable */}
-        <div className="flex-1 overflow-y-scroll pr-2 relative scrollbar-always">
+        <div className="flex-1 overflow-y-scroll pr-2 space-y-6">
           <Form {...form}>
-            <form
-              id="reservation-form"
-              onSubmit={form.handleSubmit(submit)}
-              className="space-y-6 pb-6"
-            >
+            <form id="reservation-form" onSubmit={form.handleSubmit(submit)} className="space-y-6 pb-6">
+
               {/* Sala */}
-              <FormField control={form.control} name="roomId" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Sala *</FormLabel>
-                  <FormDescription>Selecciona la sala donde se realizará la actividad</FormDescription>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecciona sala" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {rooms.map(r => (
-                        <SelectItem key={r._id} value={r._id}>{r.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              <FormField
+                control={form.control}
+                name="roomId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sala *</FormLabel>
+                    <FormDescription>Selecciona la sala</FormDescription>
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) => {
+                        field.onChange(v);
+                        setSelectedDate(null);
+                        setSelectedSlot(null);
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona sala" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {(roomsProp ?? roomsLocal).map((r) => (
+                          <SelectItem key={r._id} value={r._id}>
+                            {r.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
 
-              {/* Jugadores */}
-              <FormField control={form.control} name="players" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Jugadores *</FormLabel>
-                  <FormDescription>Elige el número de jugadores</FormDescription>
-                  <Select
-                    value={String(field.value)}
-                    onValueChange={(v) => field.onChange(Number(v))}
-                    disabled={!selectedRoom}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecciona jugadores" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {playerOptions.map(p => (
-                        <SelectItem key={p.players} value={String(p.players)}>
-                          {p.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedRoom && (
-                    <p className="text-xs text-muted-foreground">
-                      Precio: {eur(computedPrice)} · Capacidad {selectedRoom.capacityMin}–{selectedRoom.capacityMax}
-                    </p>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )} />
-
-              {/* Fecha */}
-              <FormField control={form.control} name="date" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fecha *</FormLabel>
-                  <FormDescription>Selecciona el día de la reserva</FormDescription>
-                  <Input type="date" className="w-full" {...field} />
-                  <FormMessage />
-                </FormItem>
-              )} />
-
-              {/* Hora */}
-              <FormField control={form.control} name="slot" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hora *</FormLabel>
-                  <FormDescription>Elige una franja horaria disponible</FormDescription>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecciona franja" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {slotOptions.map(s => (
-                        <SelectItem
-                          key={s._id}
-                          value={s._id}
-                          disabled={s.reserved}
-                          className={s.reserved ? "!text-red-500 !opacity-100 font-semibold" : ""}
-                        >
-                          {s.start}–{s.end} {s.reserved && " (ocupado)"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
-              {/* Idioma */}
-              <FormField control={form.control} name="language" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Idioma *</FormLabel>
-                  <FormDescription>Selecciona el idioma de la sesión</FormDescription>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="es">Español</SelectItem>
-                      <SelectItem value="en">Inglés</SelectItem>
-                      <SelectItem value="ru">Ruso</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
-              {/* Cliente */}
-              <FormField control={form.control} name="customerSelectId" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cliente</FormLabel>
-                  <FormDescription>Selecciona un cliente existente o crea uno nuevo</FormDescription>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Selecciona cliente" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {customers.map((c) => (
-                        <SelectItem key={c.email} value={String(c.email)}>
-                          {`${c.name} — ${c.email}`}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="__new__">➕ Crear nuevo cliente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
-              {/* Formulario nuevo cliente */}
-              {watchCustomer === "__new__" && (
+              {!selectedRoom ? (
+                <p className="text-sm text-muted-foreground italic">
+                  Selecciona una sala para continuar.
+                </p>
+              ) : (
                 <>
-                  <FormField control={form.control} name="firstName" render={({ field }) => (
+                  {/* Jugadores */}
+                  <FormField
+                    control={form.control}
+                    name="players"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Jugadores *</FormLabel>
+                        <Select
+                          value={field.value ? String(field.value) : ""}
+                          onValueChange={(v) => field.onChange(Number(v))}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecciona número de jugadores" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {selectedRoom.priceTable.map((p) => (
+                              <SelectItem key={p.players} value={String(p.players)}>
+                                {p.players} jugadores — {eur(p.price)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <p className="text-xs text-muted-foreground">
+                          Precio: {eur(computedPrice)} · Capacidad{" "}
+                          {selectedRoom.capacityMin}–{selectedRoom.capacityMax}
+                        </p>
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Calendario + horas */}
+                  <FormItem>
+                    <FormLabel>Fecha y hora *</FormLabel>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate ?? undefined}
+                        onSelect={(d) => {
+                          setSelectedDate(d ?? null);
+                          setSelectedSlot(null);
+                        }}
+                        className="rounded-md border shadow-sm p-2"
+                        modifiers={{
+                          green: (d) => getDayStatus(d) === "green",
+                          yellow: (d) => getDayStatus(d) === "yellow",
+                          red: (d) => getDayStatus(d) === "red",
+                          disabled: (d) => getDayStatus(d) === "disabled",
+                        }}
+                        modifiersClassNames={{
+                          green:
+                            "bg-green-100 text-green-800 hover:bg-green-200",
+                          yellow:
+                            "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
+                          red: "bg-red-100 text-red-800",
+                          disabled: "opacity-40 pointer-events-none",
+                        }}
+                      />
+                     <div className="flex flex-wrap content-start items-start gap-2 flex-1">
+
+                        {selectedDate ? (
+                          slotOptions.length ? (
+                            slotOptions.map((s, i) => (
+                              <Button
+                                key={i}
+                                type="button"
+                                variant={
+                                  s.reserved
+                                    ? "secondary"
+                                    : selectedSlot === `${s.start}-${s.end}`
+                                      ? "default"
+                                      : "outline"
+                                }
+                                disabled={s.reserved}
+                                onClick={() =>
+                                  setSelectedSlot(`${s.start}-${s.end}`)
+                                }
+                                className={cn(
+                                  s.reserved && "text-red-500 font-semibold"
+                                )}
+                              >
+                                {s.start}
+                              </Button>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground col-span-full">
+                              No hay franjas disponibles este día.
+                            </p>
+                          )
+                        ) : (
+                          <p className="text-sm text-muted-foreground col-span-full">
+                            Selecciona una fecha.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </FormItem>
+
+                  {/* Cliente */}
+                  <FormField
+                    control={form.control}
+                    name="customerSelectId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cliente</FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecciona cliente" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {customers.map((c) => (
+                              <SelectItem key={c._id} value={String(c._id)}>
+                                {`${c.name} — ${c.email}`}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="__new__">
+                              ➕ Crear nuevo cliente
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+
+                  {watchCustomer === "__new__" && (
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="firstName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nombre *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Nombre" {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="lastName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Apellidos *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Apellidos" {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email *</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="email"
+                                placeholder="tucorreo@ejemplo.com"
+                                {...field}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Teléfono *</FormLabel>
+                            <FormControl>
+                              <Input type="tel" placeholder="+34..." {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {/* Descripción */}
+                  {/* <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Descripción</FormLabel>
+                        <Input
+                          placeholder="Breve descripción de la reserva"
+                          {...field}
+                        />
+                      </FormItem>
+                    )}
+                  /> */}
+
+                  {/* Notas */}
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notas cliente</FormLabel>
+                        <Textarea
+                          rows={3}
+                          placeholder="Notas adicionales o detalles relevantes para la reserva"
+                          {...field}
+                        />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Notas internas */}
+                <FormField
+                  control={form.control}
+                  name="internalNotes"
+                  render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nombre *</FormLabel>
-                      <FormControl><Input placeholder="Nombre" {...field} /></FormControl>
-                      <FormMessage />
+                      <FormLabel>Notas internas</FormLabel>
+                      <Textarea
+                        rows={3}
+                        placeholder="Solo visibles para el personal interno"
+                        {...field}
+                      />
+                      <FormDescription>
+                        Estas notas no se muestran al cliente.
+                      </FormDescription>
                     </FormItem>
-                  )} />
-                  <FormField control={form.control} name="lastName" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Apellidos *</FormLabel>
-                      <FormControl><Input placeholder="Apellidos" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="email" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email *</FormLabel>
-                      <FormControl><Input type="email" placeholder="tucorreo@ejemplo.com" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="phone" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Teléfono *</FormLabel>
-                      <FormControl><Input type="tel" placeholder="+34..." {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
+                  )}
+                />
+<FormField
+  control={form.control}
+  name="status"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>Estado de la reserva</FormLabel>
+      <Select
+        value={field.value}
+        onValueChange={field.onChange}
+      >
+        <FormControl>
+          <SelectTrigger
+            className={cn(
+              field.value === "pendiente" && "border-yellow-300 text-yellow-700",
+              field.value === "confirmada" && "border-green-300 text-green-700",
+              field.value === "cancelada" && "border-red-300 text-red-700"
+            )}
+          >
+            <SelectValue placeholder="Selecciona estado" />
+          </SelectTrigger>
+        </FormControl>
+        <SelectContent>
+          <SelectItem value="pendiente">
+            <div className="flex items-center gap-2 text-yellow-700">
+              <Clock className="w-4 h-4 text-yellow-600" />
+              <span>Pendiente</span>
+            </div>
+          </SelectItem>
+          <SelectItem value="confirmada">
+            <div className="flex items-center gap-2 text-green-700">
+              <CheckCircle className="w-4 h-4 text-green-600" />
+              <span>Confirmada</span>
+            </div>
+          </SelectItem>
+          <SelectItem value="cancelada">
+            <div className="flex items-center gap-2 text-red-700">
+              <XCircle className="w-4 h-4 text-red-600" />
+              <span>Cancelada</span>
+            </div>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </FormItem>
+  )}
+/>
+
                 </>
               )}
-
-              {/* Descripción */}
-              <FormField control={form.control} name="description" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Descripción</FormLabel>
-                  <Input placeholder="Breve descripción de la reserva" {...field} />
-                  <FormMessage />
-                </FormItem>
-              )} />
-
-              {/* Notas */}
-              <FormField control={form.control} name="notes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notas</FormLabel>
-                  <Textarea rows={3} placeholder="Notas internas de la reserva" {...field} />
-                  <FormMessage />
-                </FormItem>
-              )} />
             </form>
           </Form>
         </div>
 
-        {/* Footer fijo al final */}
+        {/* Footer fijo */}
         <DialogFooter className="border-t bg-background p-4 flex justify-between">
-          {mode === "edit" && (
+          {mode === "edit" && reservation?._id && (
             <Button
               type="button"
               variant="destructive"
               size="sm"
               onClick={async () => {
-                if (!reservation?._id) return;
-                const confirmed = window.confirm("¿Seguro que deseas eliminar esta reserva?");
+                const confirmed = window.confirm(
+                  "¿Seguro que deseas eliminar esta reserva?"
+                );
                 if (!confirmed) return;
-
                 const t = toast.loading("Eliminando reserva...");
                 try {
                   const res = await fetch(`/api/reservations/${reservation._id}`, {
@@ -600,12 +708,14 @@ export default function ReservationModal({
                   });
                   const json = await res.json();
                   if (!res.ok) throw new Error(json?.error || "Error al eliminar");
-
                   toast.success("Reserva eliminada correctamente", { id: t });
                   onOpenChange(false);
-                  if (onSaved) await onSaved(reservation._id);
+                  onSaved?.(reservation._id);
                 } catch (e: any) {
-                  toast.error("Error eliminando reserva", { id: t, description: e?.message });
+                  toast.error("Error eliminando reserva", {
+                    id: t,
+                    description: e?.message,
+                  });
                 }
               }}
             >
@@ -613,11 +723,14 @@ export default function ReservationModal({
             </Button>
           )}
 
-          <Button type="submit" form="reservation-form" className="w-full sm:w-auto">
+          <Button
+            type="submit"
+            form="reservation-form"
+            className="w-full sm:w-auto"
+          >
             {mode === "edit" ? "Guardar cambios" : "Crear reserva"}
           </Button>
         </DialogFooter>
-
       </DialogContent>
     </Dialog>
   );
