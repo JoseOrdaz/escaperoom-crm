@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 
-
-
+/* ───────────────────────────────
+   Utilidades
+──────────────────────────────── */
 const HHMM = /^\d{2}:\d{2}$/;
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -14,13 +15,13 @@ function safeObjectId(id?: string) {
 
 const toDateAtLocal = (ymd: string, hhmm = "00:00") =>
   new Date(`${ymd}T${hhmm}:00`);
+
 const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
 
-/* GET obtener una reserva por ID */
-export async function GET(
-  req: NextRequest,
-  context: { params: { id: string } }
-) {
+/* ───────────────────────────────
+   GET → Obtener una reserva por ID
+──────────────────────────────── */
+export async function GET(req: NextRequest, context: any) {
   try {
     const _id = safeObjectId(context.params.id);
     if (!_id) {
@@ -76,12 +77,12 @@ export async function GET(
   }
 }
 
-
-
-/* PATCH editar reserva */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+/* ───────────────────────────────
+   PATCH → Editar una reserva
+──────────────────────────────── */
+export async function PATCH(req: NextRequest, context: any) {
   try {
-    const _id = safeObjectId(params.id);
+    const _id = safeObjectId(context.params.id);
     if (!_id) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
@@ -99,43 +100,25 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       return NextResponse.json({ ok: false, error: "Sala no encontrada" }, { status: 404 });
     }
 
-    // 🔹 Normalizar fechas y horas
+    // Normalizar fechas y horas
     if (!YMD.test(body.date) || !HHMM.test(body.start)) {
       return NextResponse.json({ ok: false, error: "Fecha u hora inválida" }, { status: 400 });
     }
+
     const start = toDateAtLocal(body.date, body.start);
     const end = body.end
       ? toDateAtLocal(body.date, body.end)
       : addMinutes(start, room.durationMinutes ?? 60);
 
-    // 🔹 Precio
-    interface PriceTableRow {
-      players: number;
-      price: number;
-    }
+    // Calcular precio
     const priceRow = (room.priceTable ?? []).find(
-      (r: PriceTableRow) => Number(r.players) === Number(body.players)
+      (r: { players: number; price: number }) =>
+        Number(r.players) === Number(body.players)
     );
     const price = Number(priceRow?.price ?? 0);
 
-    // 🔹 Construir update limpio
-    interface ReservationUpdate {
-      roomId: ObjectId;
-      roomName: string;
-      start: Date;
-      end: Date;
-      players: number;
-      price: number;
-      language: string;
-      // description?: string;
-      notes: string;
-      internalNotes: string;
-      updatedAt: Date;
-      status: string;
-      customerId?: ObjectId;
-    }
-
-    const update: ReservationUpdate = {
+    // Construir update limpio
+    const update: any = {
       roomId,
       roomName: room.name,
       start,
@@ -143,14 +126,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       players: body.players,
       price,
       language: body.language ?? "es",
-      // description: body.description ?? "",
       notes: body.notes ?? "",
       internalNotes: body.internalNotes ?? "",
       updatedAt: new Date(),
       status: body.status ?? "pendiente",
     };
 
-    // 🔹 Cliente
+    // Cliente
     if (body.customerEmail) {
       const email = String(body.customerEmail).toLowerCase().trim();
       const name = (body.customerName ?? email).toString().trim();
@@ -166,14 +148,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         .collection("customers")
         .findOne({ email }, { projection: { _id: 1 } });
 
-      if (cDoc?._id) {
-        update.customerId = cDoc._id;
-      }
+      if (cDoc?._id) update.customerId = cDoc._id;
     } else if (body.customerId) {
       const cid = safeObjectId(body.customerId);
-      if (cid) {
-        update.customerId = cid;
-      }
+      if (cid) update.customerId = cid;
     }
 
     const res = await db.collection("reservations").updateOne(
@@ -188,7 +166,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       );
     }
 
-    return NextResponse.json({ ok: true, _id: params.id });
+    return NextResponse.json({ ok: true, _id: context.params.id });
   } catch (err: unknown) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Error" },
@@ -197,15 +175,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 }
 
-/* PUT (alias de PATCH) */
-export async function PUT(req: Request, ctx: { params: { id: string } }) {
-  return PATCH(req, ctx);
+/* ───────────────────────────────
+   PUT → Alias de PATCH
+──────────────────────────────── */
+export async function PUT(req: NextRequest, context: any) {
+  return PATCH(req, context);
 }
 
-/* DELETE eliminar reserva */
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+/* ───────────────────────────────
+   DELETE → Eliminar una reserva
+──────────────────────────────── */
+export async function DELETE(req: NextRequest, context: any) {
   try {
-    const _id = safeObjectId(params.id);
+    const _id = safeObjectId(context.params.id);
     if (!_id) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
@@ -217,10 +199,17 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
       return NextResponse.json({ ok: false, error: "Reserva no encontrada" }, { status: 404 });
     }
 
-    return NextResponse.json({ ok: true, message: "Reserva eliminada correctamente" });
+    return NextResponse.json({
+      ok: true,
+      message: "Reserva eliminada correctamente",
+    });
   } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : "Error al eliminar la reserva" },
+      {
+        ok: false,
+        error:
+          err instanceof Error ? err.message : "Error al eliminar la reserva",
+      },
       { status: 500 }
     );
   }
