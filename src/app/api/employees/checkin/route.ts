@@ -12,10 +12,15 @@ export async function POST(req: Request) {
   if (!employee)
     return NextResponse.json({ error: "Empleado no encontrado" }, { status: 404 });
 
+  const checkin = {
+    type,
+    timestamp: new Date(),
+  };
+
   await db.collection("employees").updateOne(
     { email },
-    { $push: { checkins: { type, timestamp: new Date() } } }
+    { $push: { checkins: checkin } }
   );
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(checkin);
 }

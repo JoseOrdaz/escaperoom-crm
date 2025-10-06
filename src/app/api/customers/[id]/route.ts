@@ -1,17 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { ObjectId } from "mongodb";
 
-/* GET → obtener cliente por ID */
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+/* ───────────────────────────────
+   GET → obtener cliente por ID
+──────────────────────────────── */
+export async function GET(req: NextRequest, context: any) {
   try {
     const db = await connectDB();
     const customer = await db
       .collection("customers")
-      .findOne({ _id: new ObjectId(params.id) });
+      .findOne({ _id: new ObjectId(context.params.id) });
 
     if (!customer) {
       return NextResponse.json(
@@ -34,18 +33,17 @@ export async function GET(
   }
 }
 
-/* PUT → actualizar cliente */
-export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+/* ───────────────────────────────
+   PUT → actualizar cliente
+──────────────────────────────── */
+export async function PUT(req: NextRequest, context: any) {
   try {
     const db = await connectDB();
     const body = await req.json();
-
     const { name, email, phone } = body;
+
     const res = await db.collection("customers").updateOne(
-      { _id: new ObjectId(params.id) },
+      { _id: new ObjectId(context.params.id) },
       {
         $set: {
           name: name ?? "",
@@ -72,17 +70,15 @@ export async function PUT(
   }
 }
 
-/* DELETE → eliminar cliente */
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+/* ───────────────────────────────
+   DELETE → eliminar cliente
+──────────────────────────────── */
+export async function DELETE(req: NextRequest, context: any) {
   try {
     const db = await connectDB();
-
     const res = await db
       .collection("customers")
-      .deleteOne({ _id: new ObjectId(params.id) });
+      .deleteOne({ _id: new ObjectId(context.params.id) });
 
     if (res.deletedCount === 0) {
       return NextResponse.json(
