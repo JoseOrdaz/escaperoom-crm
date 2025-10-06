@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 import { z } from "zod";
 
 /* ─── Schemas ─────────────────────────────────────────────── */
 const timeHHmm = z.string().regex(/^\d{2}:\d{2}$/, "Formato HH:mm");
-const timeSlot = z.object({ start: timeHHmm, end: timeHHmm })
+const timeSlot = z
+  .object({ start: timeHHmm, end: timeHHmm })
   .refine((s) => s.start < s.end, { path: ["end"], message: "Inicio < fin" });
 
 const weekTemplate = z.object({
@@ -42,25 +43,31 @@ const priceRow = z.object({
   price: z.coerce.number().min(0),
 });
 
-const bodySchema = z.object({
-  name: z.string().min(1).max(60).optional(),
-  active: z.coerce.boolean().optional(),
-  durationMinutes: z.coerce.number().int().min(30).max(180).optional(),
-  capacityMin: z.coerce.number().int().min(1).optional(),
-  capacityMax: z.coerce.number().int().min(1).optional(),
-  imageUrl: imageUrlSchema.optional(),
-  priceTable: z.array(priceRow).optional(),
-  schedule: z.object({
-    template: weekTemplate,
-    daysOff: z.array(dayOff).default([]),
-    overrides: z.array(override).default([]),
-  }).optional(),
-  linkedRooms: z.array(z.string()).optional(),
-})
-  .refine((v) => {
-    if (v.capacityMin == null || v.capacityMax == null) return true;
-    return v.capacityMin <= v.capacityMax;
-  }, { path: ["capacityMin"], message: "El mínimo no puede ser mayor que el máximo" })
+const bodySchema = z
+  .object({
+    name: z.string().min(1).max(60).optional(),
+    active: z.coerce.boolean().optional(),
+    durationMinutes: z.coerce.number().int().min(30).max(180).optional(),
+    capacityMin: z.coerce.number().int().min(1).optional(),
+    capacityMax: z.coerce.number().int().min(1).optional(),
+    imageUrl: imageUrlSchema.optional(),
+    priceTable: z.array(priceRow).optional(),
+    schedule: z
+      .object({
+        template: weekTemplate,
+        daysOff: z.array(dayOff).default([]),
+        overrides: z.array(override).default([]),
+      })
+      .optional(),
+    linkedRooms: z.array(z.string()).optional(),
+  })
+  .refine(
+    (v) => {
+      if (v.capacityMin == null || v.capacityMax == null) return true;
+      return v.capacityMin <= v.capacityMax;
+    },
+    { path: ["capacityMin"], message: "El mínimo no puede ser mayor que el máximo" }
+  )
   .strip();
 
 /* ─── Helper de ObjectId ──────────────────────────────────── */
@@ -74,6 +81,7 @@ function asObjectId(id: string) {
 
 /* ─── Normalizadores ──────────────────────────────────────── */
 const hhmm = /^\d{2}:\d{2}$/;
+
 function normSlots(a: any): { start: string; end: string }[] {
   if (!Array.isArray(a)) return [];
   return a
@@ -99,13 +107,22 @@ function normSchedule(s: any) {
     },
     daysOff: daysOff
       .map((d: any) => ({ date: d?.date, reason: d?.reason ?? "" }))
-      .filter((d: any) => typeof d.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.date)),
+      .filter(
+        (d: any) =>
+          typeof d.date === "string" &&
+          /^\d{4}-\d{2}-\d{2}$/.test(d.date)
+      ),
     overrides: overrides
       .map((o: any) => ({
         date: o?.date,
         slots: normSlots(o?.slots),
       }))
-      .filter((o: any) => typeof o.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && o.slots.length > 0),
+      .filter(
+        (o: any) =>
+          typeof o.date === "string" &&
+          /^\d{4}-\d{2}-\d{2}$/.test(o.date) &&
+          o.slots.length > 0
+      ),
   };
 }
 
@@ -115,9 +132,13 @@ function normPriceTable(pt: any): { players: number; price: number }[] {
   for (const r of pt) {
     const players = Number(r?.players);
     const price = Number(r?.price);
-    if (Number.isInteger(players) && players >= 1 && Number.isFinite(price) && price >= 0) {
-      // si llega duplicado el mismo nº de jugadores, nos quedamos con el último
-      map.set(players, price);
+    if (
+      Number.isInteger(players) &&
+      players >= 1 &&
+      Number.isFinite(price) &&
+      price >= 0
+    ) {
+      map.set(players, price); // sobrescribe duplicados
     }
   }
   return [...map.entries()]
@@ -125,10 +146,10 @@ function normPriceTable(pt: any): { players: number; price: number }[] {
     .sort((a, b) => a.players - b.players);
 }
 
-/* ─── Handler PATCH ───────────────────────────────────────── */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+/* ─── PATCH → editar sala ─────────────────────────────────── */
+export async function PATCH(req: NextRequest, context: any) {
   try {
-    const _id = asObjectId(params.id);
+    const _id = asObjectId(context.params.id);
     if (!_id) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
@@ -143,8 +164,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
 
     const data = parsed.data;
-
-    // Construimos $set solo con campos presentes
     const $set: Record<string, any> = { updatedAt: new Date() };
 
     if (data.name !== undefined) $set.name = data.name.trim();
@@ -192,10 +211,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 }
 
-
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+/* ─── DELETE → eliminar sala ──────────────────────────────── */
+export async function DELETE(req: NextRequest, context: any) {
   const db = await connectDB();
-  const _id = new ObjectId(params.id);
+  const _id = new ObjectId(context.params.id);
 
   // (Opcional) Comprueba reservas vinculadas antes de borrar
   // const reservations = await db.collection("reservations").countDocuments({ roomId: _id });
