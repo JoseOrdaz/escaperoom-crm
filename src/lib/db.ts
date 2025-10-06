@@ -4,7 +4,7 @@ import { MongoClient, Db } from "mongodb";
 const uri = process.env.MONGODB_URI!;
 if (!uri) throw new Error("MONGODB_URI not set");
 
-const dbName = "escape_room";
+const dbName = "escape_crm";
 
 let client: MongoClient | null = null;
 let database: Db | null = null;
