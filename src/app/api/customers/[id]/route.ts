@@ -26,9 +26,9 @@ export async function GET(
       email: customer.email ?? "",
       phone: customer.phone ?? "",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Error" },
+      { ok: false, error: err instanceof Error ? err.message : "Error" },
       { status: 500 }
     );
   }
@@ -64,9 +64,9 @@ export async function PUT(
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Error" },
+      { ok: false, error: err instanceof Error ? err.message : "Error" },
       { status: 500 }
     );
   }
@@ -92,9 +92,9 @@ export async function DELETE(
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Error" },
+      { ok: false, error: err instanceof Error ? err.message : "Error" },
       { status: 500 }
     );
   }

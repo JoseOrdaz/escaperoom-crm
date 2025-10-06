@@ -62,9 +62,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       internalNotes: typeof doc.internalNotes === "string" ? doc.internalNotes : "",
       customer,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Error" },
+      { ok: false, error: err instanceof Error ? err.message : "Error" },
       { status: 500 }
     );
   }
@@ -103,13 +103,33 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       : addMinutes(start, room.durationMinutes ?? 60);
 
     // 🔹 Precio
+    interface PriceTableRow {
+      players: number;
+      price: number;
+    }
     const priceRow = (room.priceTable ?? []).find(
-      (r: any) => Number(r.players) === Number(body.players)
+      (r: PriceTableRow) => Number(r.players) === Number(body.players)
     );
     const price = Number(priceRow?.price ?? 0);
 
     // 🔹 Construir update limpio
-    const update: any = {
+    interface ReservationUpdate {
+      roomId: ObjectId;
+      roomName: string;
+      start: Date;
+      end: Date;
+      players: number;
+      price: number;
+      language: string;
+      // description?: string;
+      notes: string;
+      internalNotes: string;
+      updatedAt: Date;
+      status: string;
+      customerId?: ObjectId;
+    }
+
+    const update: ReservationUpdate = {
       roomId,
       roomName: room.name,
       start,
@@ -163,9 +183,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
 
     return NextResponse.json({ ok: true, _id: params.id });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Error" },
+      { ok: false, error: err instanceof Error ? err.message : "Error" },
       { status: 500 }
     );
   }
@@ -192,9 +212,9 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     }
 
     return NextResponse.json({ ok: true, message: "Reserva eliminada correctamente" });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Error al eliminar la reserva" },
+      { ok: false, error: err instanceof Error ? err.message : "Error al eliminar la reserva" },
       { status: 500 }
     );
   }

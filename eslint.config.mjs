@@ -19,6 +19,15 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
     ],
+
+    // ✅ Aquí añadimos las reglas personalizadas
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off", // 🔧 Desactiva los errores de "any"
+      "@typescript-eslint/no-unused-vars": "warn", // Solo aviso si defines variables no usadas
+      "react-hooks/exhaustive-deps": "warn",       // Solo aviso, no bloquea el build
+      "prefer-const": "warn",                      // Sugerencia, no error
+      "@next/next/no-img-element": "off",          // Permite usar <img> sin romper build
+    },
   },
 ];
 

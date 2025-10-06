@@ -31,9 +31,9 @@ export async function GET() {
         reservationsCount: countMap.get(String(c._id)) ?? 0,
       })),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Error" },
+      { ok: false, error: err instanceof Error ? err.message : "Error" },
       { status: 500 }
     );
   }
@@ -61,9 +61,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true, _id: String(res.insertedId) });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { ok: false, error: err?.message ?? "Error" },
+      { ok: false, error: err instanceof Error ? err.message : "Error" },
       { status: 500 }
     );
   }
