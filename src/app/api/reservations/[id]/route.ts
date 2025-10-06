@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
+
+
 
 const HHMM = /^\d{2}:\d{2}$/;
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -15,9 +17,12 @@ const toDateAtLocal = (ymd: string, hhmm = "00:00") =>
 const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
 
 /* GET obtener una reserva por ID */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  req: NextRequest,
+  context: { params: { id: string } }
+) {
   try {
-    const _id = safeObjectId(params.id);
+    const _id = safeObjectId(context.params.id);
     if (!_id) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
@@ -38,6 +43,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
           { _id: doc.customerId },
           { projection: { _id: 1, name: 1, email: 1, phone: 1 } }
         );
+
       if (c) {
         customer = {
           id: String(c._id),
@@ -57,9 +63,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       players: doc.players ?? 0,
       price: doc.price ?? 0,
       language: doc.language ?? "es",
-      // description: doc.description ?? "",
       notes: typeof doc.notes === "string" ? doc.notes : "",
-      internalNotes: typeof doc.internalNotes === "string" ? doc.internalNotes : "",
+      internalNotes:
+        typeof doc.internalNotes === "string" ? doc.internalNotes : "",
       customer,
     });
   } catch (err: unknown) {
