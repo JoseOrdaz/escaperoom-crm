@@ -5,13 +5,21 @@ import { RoomEditForm } from "@/app/dashboard/rooms/_components/room-edit-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function RoomEditPage({ params }: { params: { id: string } }) {
+export default async function RoomEditPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  // ✅ Esperamos el objeto params antes de usarlo
+  const { id } = await params;
+
   const db = await connectDB();
-  let room = await db.collection("rooms").findOne({ _id: new ObjectId(params.id) });
+  const room = await db.collection("rooms").findOne({ _id: new ObjectId(id) });
+
   if (!room) return notFound();
 
-  // normaliza valores
-  room = {
+  // ✅ Normaliza valores con fallback seguros
+  const normalizedRoom = {
     ...room,
     _id: room._id.toString(),
     imageUrl: room.imageUrl ?? "",
@@ -37,10 +45,12 @@ export default async function RoomEditPage({ params }: { params: { id: string } 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{room.name}</h1>
-        <p className="text-sm text-muted-foreground">Editar configuración de la sala</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{normalizedRoom.name}</h1>
+        <p className="text-sm text-muted-foreground">
+          Editar configuración de la sala
+        </p>
       </div>
-      <RoomEditForm room={room as any} />
+      <RoomEditForm room={normalizedRoom as any} />
     </div>
   );
 }

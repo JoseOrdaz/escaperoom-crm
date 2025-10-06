@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check-unused": "npx depcheck --skip-missing=true"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
