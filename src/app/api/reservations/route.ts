@@ -127,7 +127,10 @@ export async function GET(req: Request) {
     const custIds = [...new Set(docs.map((d: any) => String(d.customerId)).filter(Boolean))];
 
     const rooms = await db.collection("rooms")
-      .find({ _id: { $in: roomIds.map(safeObjectId).filter(Boolean) } }, { projection: { _id: 1, name: 1 } })
+      .find(
+        { _id: { $in: roomIds.map(safeObjectId).filter((id): id is ObjectId => id !== null) } },
+        { projection: { _id: 1, name: 1 } }
+      )
       .toArray();
 
     const customers = custIds.length
