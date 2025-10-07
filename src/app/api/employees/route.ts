@@ -18,15 +18,8 @@ export async function POST(req: Request) {
     surname: body.surname,
     email: body.email,
     role: body.role,
-    weeklySchedule: body.weeklySchedule || {
-      monday: { start: "", end: "", rooms: [] },
-      tuesday: { start: "", end: "", rooms: [] },
-      wednesday: { start: "", end: "", rooms: [] },
-      thursday: { start: "", end: "", rooms: [] },
-      friday: { start: "", end: "", rooms: [] },
-      saturday: { start: "", end: "", rooms: [] },
-      sunday: { start: "", end: "", rooms: [] },
-    },
+    escape: body.escape || "Fobia", // 👈 nuevo campo
+    weeklySchedule: body.weeklySchedule || {},
     checkins: [],
     createdAt: new Date(),
   };
@@ -38,8 +31,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   const db = await connectDB();
   const body = await req.json();
-
-  if (!body._id) return NextResponse.json({ error: "Falta el ID" }, { status: 400 });
+  if (!body._id) return NextResponse.json({ error: "Falta ID" }, { status: 400 });
 
   const id = new ObjectId(body._id);
   delete body._id;

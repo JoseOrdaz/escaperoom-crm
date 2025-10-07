@@ -22,6 +22,7 @@ export function DashboardHeader() {
           <Link href="/dashboard/reservations" className="text-muted-foreground hover:text-foreground">Calendario</Link>
           <Link href="/dashboard/bookings" className="text-muted-foreground hover:text-foreground">Reservas</Link>
           <Link href="/dashboard/customers" className="text-muted-foreground hover:text-foreground">Clientes</Link>
+          <Link href="/dashboard/employees" className="text-muted-foreground hover:text-foreground">Empleados</Link>
         </nav>
 
         {/* Grow */}
