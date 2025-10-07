@@ -136,9 +136,9 @@ export async function GET(req: Request) {
     const customers = custIds.length
       ? await db.collection("customers")
           .find(
-            { _id: { $in: custIds.map(safeObjectId).filter(Boolean) } },
-            { projection: { _id: 1, name: 1, email: 1, phone: 1 } }
-          )
+          { _id: { $in: custIds.map(safeObjectId).filter((id): id is ObjectId => id !== null) } },
+          { projection: { _id: 1, name: 1, email: 1, phone: 1 } }
+        )
           .toArray()
       : [];
 
