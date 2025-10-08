@@ -17,8 +17,8 @@ import { Plus } from "lucide-react";
 
 import ReservationModal, {
   ReservationForEdit,
-  ReservationDraft,
-  Room,
+  // ReservationDraft,
+  // Room,
 } from "@/components/reservations/reservation-modal";
 
 import { Clock, CheckCircle, XCircle } from "lucide-react";
@@ -57,13 +57,38 @@ type Filters = {
 };
 
 export default function ReservationsTable() {
+  
   /* ───────── Salas ───────── */
+  type Room = {
+    _id: string;
+    name: string;
+    durationMinutes: number;
+    capacityMin: number;
+    capacityMax: number;
+    priceTable: any; // Replace 'any' with the actual type if known
+    schedule: any;   // Replace 'any' with the actual type if known
+  };
   const [rooms, setRooms] = useState<Room[]>([]);
+
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/rooms", { cache: "no-store" });
-        if (res.ok) setRooms(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          // Ensure all required properties exist, fill with defaults if missing
+          setRooms(
+            data.map((r: any) => ({
+              _id: r._id,
+              name: r.name,
+              durationMinutes: r.durationMinutes ?? 60,
+              capacityMin: r.capacityMin ?? 2,
+              capacityMax: r.capacityMax ?? 6,
+              priceTable: r.priceTable ?? {},
+              schedule: r.schedule ?? {},
+            }))
+          );
+        }
       } catch {
         toast.error("Error cargando salas");
       }
@@ -122,7 +147,7 @@ export default function ReservationsTable() {
   const [modalOpen, setModalOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("edit");
   const [editing, setEditing] = useState<ReservationForEdit | null>(null);
-  const [prefill, setPrefill] = useState<ReservationDraft | undefined>(
+  const [prefill, setPrefill] = useState<undefined>(
     undefined
   );
 
@@ -365,9 +390,7 @@ export default function ReservationsTable() {
         onOpenChange={setModalOpen}
         mode={mode}
         reservation={editing}
-        prefill={prefill}
         rooms={rooms}
-        enableCustomerSelect
         onSaved={async () => {
           await fetchData(page);
         }}

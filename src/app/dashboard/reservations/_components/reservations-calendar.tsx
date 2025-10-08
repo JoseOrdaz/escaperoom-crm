@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Clock, CheckCircle, XCircle } from "lucide-react";
 
 import {
