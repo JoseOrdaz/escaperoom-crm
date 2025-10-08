@@ -1,6 +1,6 @@
 "use client";
 
-import BookingWizard from "@/app/bookings/page"; // 👈 importa tu BookingWizard
+import BookingWizard from "@/components/bookings"; 
 
 export default function BookingsFobiaPage() {
   const roomIds = [

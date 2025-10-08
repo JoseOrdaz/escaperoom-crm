@@ -1,7 +1,7 @@
 "use client";
 
-import BookingWizard from "@/app/bookings/page"; // 👈 importa tu BookingWizard
-
+import BookingWizard from "@/components/bookings";
+ 
 export default function BookingsActionGatesPage() {
   const roomIds = [
     "68d70ef68bf39964730e5a5d", 
