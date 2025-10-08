@@ -408,25 +408,29 @@ export default function BookingWizard({
                       disabled: (d) => getDayStatus(d) === "disabled",
                     }}
                     modifiersClassNames={{
-                      green: "bg-green-100 text-green-800 rounded-md hover:bg-green-200",
-                      yellow: "bg-yellow-100 text-yellow-800 rounded-md hover:bg-yellow-200",
-                      red: "bg-red-100 text-red-800 rounded-md",
-                      disabled: "opacity-40 pointer-events-none",
+                      green: "bg-green-100 text-green-800 rounded-md hover:bg-green-200 m-1",
+                      yellow: "bg-yellow-100 text-yellow-800 rounded-md hover:bg-yellow-200 m-1",
+                      red: "bg-red-100 text-red-800 rounded-md m-1",
+                      disabled: "opacity-40 pointer-events-none m-1",
                     }}
                   />
                 </div>
 
-                <div className="flex justify-center gap-6 mt-4 text-sm">
-                  <div className="flex items-center gap-1">
-                    <span className="w-4 h-4 bg-green-200 rounded" /> Verde: todas disponibles
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="w-4 h-4 bg-yellow-200 rounded" /> Amarillo: algunas libres
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="w-4 h-4 bg-red-200 rounded" /> Rojo: no quedan
-                  </div>
-                </div>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-6 rounded-xl bg-muted/30 px-6 py-4 shadow-sm border border-border/50">
+  <div className="flex items-center gap-2">
+    <span className="w-4 h-4 rounded-md bg-green-400/80 shadow-sm ring-1 ring-green-600/40" />
+    <span className="text-sm text-muted-foreground font-medium">Todas disponibles</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="w-4 h-4 rounded-md bg-yellow-300/80 shadow-sm ring-1 ring-yellow-600/40" />
+    <span className="text-sm text-muted-foreground font-medium">Algunas libres</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="w-4 h-4 rounded-md bg-red-400/80 shadow-sm ring-1 ring-red-600/40" />
+    <span className="text-sm text-muted-foreground font-medium">No quedan / Cerrado</span>
+  </div>
+</div>
+
 
                 {date && (
                   <div className="mt-6 max-w-lg mx-auto">
