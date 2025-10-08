@@ -145,31 +145,23 @@ export default async function RoomsPage() {
   return (
     <div className="space-y-6">
       {/* Migas + toolbar */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Salas</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Salas</h1>
-          <p className="text-sm text-muted-foreground">
-            Gestiona salas, horarios y precios por jugadores
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* <Input placeholder="Buscar…" className="hidden w-[240px] md:block" /> */}
-          <Button asChild>
-            <Link href="/dashboard/rooms/new">+ Añadir sala</Link>
-          </Button>
-        </div>
-      </div>
+      <div className="flex items-center justify-between mb-6">
+  <div>
+    <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+      Salas
+    </h1>
+    <p className="text-sm text-muted-foreground">
+      Gestiona las salas activas, horarios y precios por jugadores
+    </p>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <Button asChild className="shadow-sm hover:shadow-md transition-all">
+      <Link href="/dashboard/rooms/new">+ Añadir sala</Link>
+    </Button>
+  </div>
+</div>
+
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

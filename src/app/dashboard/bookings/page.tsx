@@ -181,20 +181,30 @@ export default function ReservationsTable() {
   /* ───────── Render ───────── */
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Gestión de reservas</h2>
-        <Button
-          onClick={() => {
-            setMode("create");
-            setEditing(null);
-            setPrefill(undefined);
-            setModalOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" /> Añadir reserva
-        </Button>
-      </div>
+      <div className="flex items-center justify-between mb-6">
+  <div>
+    <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+      Gestión de reservas
+    </h1>
+    <p className="text-sm text-muted-foreground">
+      Crea, edita o cancela reservas de forma rápida y centralizada
+    </p>
+  </div>
 
+  <Button
+    onClick={() => {
+      setMode("create");
+      setEditing(null);
+      setPrefill(undefined);
+      setModalOpen(true);
+    }}
+    className="shadow-sm hover:shadow-md transition-all"
+  >
+    <Plus className="mr-2 h-4 w-4" /> Añadir reserva
+  </Button>
+</div>
+
+    
       <Card>
         <CardHeader>
           <CardTitle>Listado de Reservas</CardTitle>

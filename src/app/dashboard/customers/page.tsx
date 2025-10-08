@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Plus } from "lucide-react";
 import CustomerModal, {
   CustomerForEdit,
 } from "@/components/customers/customer-modal";
@@ -47,6 +48,29 @@ export default function CustomersTable() {
   }
 
   return (
+
+    <>
+    <div className="flex items-center justify-between mb-6">
+  <div>
+    <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+      Clientes
+    </h1>
+    <p className="text-sm text-muted-foreground">
+      Administra los datos de tus clientes y haz un seguimiento de sus reservas
+    </p>
+  </div>
+
+  <Button
+    onClick={() => {
+      setEditing(null);
+      setModalOpen(true);
+    }}
+    className="shadow-sm hover:shadow-md transition-all"
+  >
+    <Plus className="mr-2 h-4 w-4" /> Añadir cliente
+  </Button>
+</div>
+
     <div className="space-y-6">
       <Card>
         <CardHeader>
@@ -105,5 +129,7 @@ export default function CustomersTable() {
         onSaved={fetchCustomers}
       />
     </div>
+
+    </>
   );
 }

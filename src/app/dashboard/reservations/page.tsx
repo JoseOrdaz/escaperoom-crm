@@ -1,8 +1,11 @@
 // src/app/dashboard/reservations/page.tsx
 import { headers } from "next/headers";
 import { Suspense } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ReservationsCalendar } from "./_components/reservations-calendar";
+
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +34,19 @@ export default async function ReservationsPage() {
   const initialReservations = await getInitialReservations(from, to);
 
   return (
+
+    <>
+    <div className="flex items-center justify-between mb-6">
+  <div>
+    <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+      Calendario de reservas
+    </h1>
+    <p className="text-sm text-muted-foreground">
+      Consulta y gestiona todas las reservas programadas por sala y horario
+    </p>
+  </div>
+    </div>
+
     <div className="space-y-6">
       <Card>
         <CardHeader>
@@ -47,5 +63,6 @@ export default async function ReservationsPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

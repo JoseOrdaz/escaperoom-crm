@@ -38,6 +38,9 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { usePathname, useSearchParams } from "next/navigation";
+
+
 
 export default function EmployeesPage() {
   /* ───── Estados ───── */
@@ -167,10 +170,46 @@ export default function EmployeesPage() {
 
   const filteredSchedule = schedule.sort((a, b) => (a.date > b.date ? 1 : -1));
 
+  // Estado actual del tab
+const [tabValue, setTabValue] = useState("list");
+
+// Detecta el hash de la URL (#checkin, #calendar, etc.)
+useEffect(() => {
+  const handleHashChange = () => {
+    const hash = window.location.hash.replace("#", "");
+    if (hash) setTabValue(hash);
+  };
+
+  // Escucha cambios de hash (cuando el usuario navega desde el header)
+  handleHashChange(); // ejecuta una vez al cargar
+  window.addEventListener("hashchange", handleHashChange);
+  return () => window.removeEventListener("hashchange", handleHashChange);
+}, []);
+
+// Sincroniza el hash al cambiar de pestaña manualmente
+useEffect(() => {
+  if (tabValue) {
+    window.history.replaceState(null, "", `#${tabValue}`);
+  }
+}, [tabValue]);
+
+
   /* ───── Render ───── */
   return (
+    <>
+    <div className="flex items-center justify-between mb-6">
+  <div>
+    <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+      Empleados
+    </h1>
+    <p className="text-sm text-muted-foreground">
+      Consulta los datos del personal, sus horarios y el estado de sus fichajes
+    </p>
+  </div>
+</div>
+
     <div className="p-6 space-y-6">
-      <Tabs defaultValue="list">
+      <Tabs value={tabValue} onValueChange={setTabValue}>
         <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="list">
             <Users className="w-4 h-4 mr-1" /> Empleados
@@ -888,5 +927,6 @@ export default function EmployeesPage() {
 
       </Tabs>
     </div>
+    </>
   );
 }
