@@ -102,13 +102,30 @@ async function getRooms(): Promise<RoomListItem[]> {
 
 // ➡️ pedir estadísticas a la API
 async function getStats() {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-  const res = await fetch(`${baseUrl}/api/reservations?stats=1`, {
-    cache: "no-store",
+  const db = await connectDB();
+
+  // total histórico
+  const totalReservations = await db.collection("reservations").countDocuments();
+
+  // rango mes actual
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  const reservationsThisMonth = await db.collection("reservations").countDocuments({
+    start: { $gte: start, $lt: end },
   });
-  if (!res.ok) return { totalReservations: 0, reservationsThisMonth: 0, totalRevenue: 0 };
-  return res.json();
+
+  // facturación total (sumar campo "price" de todas las reservas)
+  const totalRevenueAgg = await db.collection("reservations").aggregate([
+    { $group: { _id: null, total: { $sum: "$price" } } },
+  ]).toArray();
+
+  const totalRevenue = totalRevenueAgg[0]?.total ?? 0;
+
+  return { totalReservations, reservationsThisMonth, totalRevenue };
 }
+
 
 // ➡️ contar clientes totales
 async function getTotalCustomers(): Promise<number> {
