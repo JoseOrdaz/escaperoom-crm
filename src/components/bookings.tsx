@@ -371,25 +371,38 @@ export default function BookingWizard({
             {/* Paso 2: Jugadores */}
             {step === 2 && selectedRoom && (
               <motion.div initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
-                <h2 className="font-bold text-lg">¿Cuántos jugadores?</h2>
-                <div className="grid grid-cols-2 gap-3 mt-4">
-                  {selectedRoom.priceTable.map((p) => (
-                    <Button
-                      key={p.players}
-                      variant="outline"
-                      className="justify-between"
-                      onClick={() => {
-                        setPlayers(p.players);
-                        goNext(3);
-                      }}
-                    >
-                      <span>{p.players} jugadores</span>
-                      <span className="font-medium">{p.price}€</span>
-                    </Button>
-                  ))}
+                <h2 className="font-bold text-lg mb-4">¿Cuántos jugadores?</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {selectedRoom.priceTable.map((p) => {
+                    const pricePerPlayer = (p.price / p.players).toFixed(2);
+                    return (
+                      <Card
+                        key={p.players}
+                        className={cn(
+                          "cursor-pointer hover:shadow-md transition-all border-primary/20 hover:border-primary/50",
+                          players === p.players && "border-primary bg-primary/5"
+                        )}
+                        onClick={() => {
+                          setPlayers(p.players);
+                          goNext(3);
+                        }}
+                      >
+                        <CardContent className="p-4 flex flex-col items-center text-center gap-2">
+                          <p className="font-semibold text-lg">{p.players} jugadores</p>
+                          <p className="text-sm text-muted-foreground">
+                            Precio total: <span className="font-medium">{p.price} €</span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            <span className="italic">≈ {pricePerPlayer} €/jugador</span>
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
+
 
             {/* Paso 3: Fecha y hora */}
             {step === 3 && selectedRoom && (
