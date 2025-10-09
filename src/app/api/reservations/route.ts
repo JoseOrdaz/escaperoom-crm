@@ -174,20 +174,6 @@ export async function GET(req: Request) {
       };
     });
 
-    // dentro de GET, después de const docs = await db.collection("reservations")...
-console.log("🛑 Reservas encontradas:", docs.map((d: any) => ({
-  id: String(d._id),
-  roomName: d.roomName,
-  startISO: d.start,
-  endISO: d.end,
-  hhmmStart: d.start instanceof Date
-    ? d.start.toISOString().substring(11, 16)
-    : new Date(d.start).toISOString().substring(11, 16),
-  hhmmEnd: d.end instanceof Date
-    ? d.end.toISOString().substring(11, 16)
-    : new Date(d.end).toISOString().substring(11, 16),
-  players: d.players,
-})));
 
 const occupied = docs.map((d: any) => {
   const start = d.start instanceof Date
@@ -200,8 +186,6 @@ const occupied = docs.map((d: any) => {
 
   return `${start}-${end}`;
 });
-
-console.log("⛔ Franjas ocupadas:", [...new Set(occupied)]);
 
 
     return NextResponse.json(out);

@@ -154,11 +154,6 @@ export default function ReservationModal({
   const [slotOptions, setSlotOptions] = useState<Array<TimeSlot & { reserved?: boolean }>>([]);
 
 
-  useEffect(() => {
-  if (mode === "edit" && reservation) {
-    console.log("🟡 Editando reserva:", reservation);
-  }
-}, [reservation]);
 
 
   const form = useForm<FormValues>({
