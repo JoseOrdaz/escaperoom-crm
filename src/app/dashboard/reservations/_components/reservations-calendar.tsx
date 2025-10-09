@@ -97,7 +97,7 @@ export function ReservationsCalendar({
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/rooms", { cache: "no-store" });
+        const res = await fetch("/api/rooms", { cache: "force-cache" });
         if (!res.ok) throw new Error(await res.text());
         setRooms(await res.json());
       } catch (e) {
@@ -113,7 +113,7 @@ export function ReservationsCalendar({
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/customers", { cache: "no-store" });
+        const res = await fetch("/api/customers", { cache: "force-cache" });
         if (!res.ok) throw new Error(await res.text());
         const json = await res.json();
         setCustomers(json.items ?? []);
@@ -129,7 +129,7 @@ export function ReservationsCalendar({
       from: from.toISOString().slice(0, 10),
       to: to.toISOString().slice(0, 10),
     });
-    const res = await fetch(`/api/reservations?${p}`, { cache: "no-store" });
+    const res = await fetch(`/api/reservations?${p}`, { cache: "force-cache" });
     if (!res.ok) throw new Error(await res.text());
     setEvents(await res.json());
   }

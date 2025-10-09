@@ -19,7 +19,7 @@ async function getInitialReservations(fromISO: string, toISO: string) {
     const host = h.get("host") ?? "localhost:3000";
     const origin = `${proto}://${host}`;
     const p = new URLSearchParams({ from: fromISO, to: toISO });
-    const res = await fetch(`${origin}/api/reservations?${p.toString()}`, { cache: "no-store" });
+    const res = await fetch(`${origin}/api/reservations?${p.toString()}`, { cache: "force-cache" });
     if (!res.ok) return [];
     return await res.json();
   } catch {

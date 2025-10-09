@@ -73,7 +73,7 @@ export default function ReservationsTable() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/rooms", { cache: "no-store" });
+        const res = await fetch("/api/rooms", { cache: "force-cache" });
         if (res.ok) {
           const data = await res.json();
           // Ensure all required properties exist, fill with defaults if missing
@@ -126,7 +126,7 @@ export default function ReservationsTable() {
       qs.set("pageSize", String(pageSize));
 
       const res = await fetch(`/api/reservations?${qs.toString()}`, {
-        cache: "no-store",
+        cache: "force-cache",
       });
 
       if (!res.ok) throw new Error(await res.text());
