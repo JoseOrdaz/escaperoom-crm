@@ -2,6 +2,8 @@ import { ReactNode } from "react";
 import { DashboardHeader } from "@/components/header";
 import { DashboardFooter } from "@/components/footer";
 import { CalendarDays } from "lucide-react";
+import { Analytics } from "@vercel/analytics/next"
+
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -20,7 +22,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </p>
       </div>
         {children}
-        
+                <Analytics />
+
         </main>
       <DashboardFooter />
     </div>
