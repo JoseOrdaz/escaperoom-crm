@@ -349,7 +349,7 @@ export default function ReservationModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
+      <DialogContent className="max-w-5xl sm:max-w-xl h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {mode === "edit" ? "Editar reserva" : "Crear nueva reserva"}
@@ -406,6 +406,7 @@ export default function ReservationModal({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Jugadores *</FormLabel>
+                        <FormDescription>Selecciona el número de jugadores</FormDescription>
                         <Select
                           value={field.value ? String(field.value) : ""}
                           onValueChange={(v) => field.onChange(Number(v))}
@@ -435,6 +436,7 @@ export default function ReservationModal({
                   {/* Calendario + horas */}
                   <FormItem>
                     <FormLabel>Fecha y hora *</FormLabel>
+                    <FormDescription>Selecciona la fecha y hora</FormDescription>
                     <div className="flex flex-col sm:flex-row gap-4">
                       <Calendar
                         mode="single"
@@ -452,11 +454,11 @@ export default function ReservationModal({
                         }}
                         modifiersClassNames={{
                           green:
-                            "bg-green-100 text-green-800 hover:bg-green-200",
+                            "bg-green-100 text-green-800 hover:bg-green-200 m-1",
                           yellow:
-                            "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
-                          red: "bg-red-100 text-red-800",
-                          disabled: "opacity-40 pointer-events-none",
+                            "bg-yellow-100 text-yellow-800 hover:bg-yellow-200 m-1",
+                          red: "bg-red-100 text-red-800 m-1",
+                          disabled: "opacity-40 pointer-events-none m-1",
                         }}
                       />
                      <div className="flex flex-wrap content-start items-start gap-2 flex-1">
@@ -506,6 +508,7 @@ export default function ReservationModal({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Cliente</FormLabel>
+                        <FormDescription>Selecciona un cliente o crea uno nuevo</FormDescription>
                         <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger>
@@ -605,7 +608,8 @@ export default function ReservationModal({
                     name="notes"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Notas cliente</FormLabel>
+                        <FormLabel>Notas/Información cliente</FormLabel>
+                        <FormDescription>Notas o información relevante que ha enviado el cliente</FormDescription>
                         <Textarea
                           rows={3}
                           placeholder="Notas adicionales o detalles relevantes para la reserva"
@@ -620,7 +624,8 @@ export default function ReservationModal({
                   name="internalNotes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Notas internas</FormLabel>
+                      <FormLabel>Notas internas Admins</FormLabel>
+                       <FormDescription>Notas o información relevante para el personal interno</FormDescription>
                       <Textarea
                         rows={3}
                         placeholder="Solo visibles para el personal interno"
@@ -638,6 +643,7 @@ export default function ReservationModal({
   render={({ field }) => (
     <FormItem>
       <FormLabel>Estado de la reserva</FormLabel>
+       <FormDescription>Selecciona el estado actual de la reserva</FormDescription>
       <Select
         value={field.value}
         onValueChange={field.onChange}
@@ -685,7 +691,7 @@ export default function ReservationModal({
         </div>
 
         {/* Footer fijo */}
-        <DialogFooter className="border-t bg-background p-4 flex justify-between">
+        <DialogFooter className="border-t bg-background p-4 flex sm:justify-between gap-2">
           {mode === "edit" && reservation?._id && (
             <Button
               type="button"
