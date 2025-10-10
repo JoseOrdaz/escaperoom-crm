@@ -23,7 +23,8 @@ const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
 ──────────────────────────────── */
 export async function GET(req: NextRequest, context: any) {
   try {
-    const _id = safeObjectId(context.params.id);
+    const { id } = await context.params; // 👈 se debe await
+    const _id = safeObjectId(id);
     if (!_id) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
@@ -82,7 +83,8 @@ export async function GET(req: NextRequest, context: any) {
 ──────────────────────────────── */
 export async function PATCH(req: NextRequest, context: any) {
   try {
-    const _id = safeObjectId(context.params.id);
+    const { id } = await context.params; // 👈 cambio aquí también
+    const _id = safeObjectId(id);
     if (!_id) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
@@ -166,7 +168,7 @@ export async function PATCH(req: NextRequest, context: any) {
       );
     }
 
-    return NextResponse.json({ ok: true, _id: context.params.id });
+    return NextResponse.json({ ok: true, _id: id });
   } catch (err: unknown) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Error" },
@@ -179,7 +181,8 @@ export async function PATCH(req: NextRequest, context: any) {
    PUT → Alias de PATCH
 ──────────────────────────────── */
 export async function PUT(req: NextRequest, context: any) {
-  return PATCH(req, context);
+  const { id } = await context.params; // 👈 también await
+  return PATCH(req, { ...context, params: { id } });
 }
 
 /* ───────────────────────────────
@@ -187,7 +190,8 @@ export async function PUT(req: NextRequest, context: any) {
 ──────────────────────────────── */
 export async function DELETE(req: NextRequest, context: any) {
   try {
-    const _id = safeObjectId(context.params.id);
+    const { id } = await context.params; // 👈 await añadido
+    const _id = safeObjectId(id);
     if (!_id) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }

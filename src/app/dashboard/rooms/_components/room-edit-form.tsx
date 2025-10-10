@@ -424,7 +424,7 @@ export function RoomEditForm({ room }: Props) {
 useEffect(() => {
   (async () => {
     try {
-      const res = await fetch("/api/rooms", { cache: "force-cache" });
+      const res = await fetch("/api/rooms", { cache: "no-store" });
       if (res.ok) {
         const json = await res.json();
         setRooms(json);

@@ -14,18 +14,19 @@ function endOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth() + 1
 
 async function getInitialReservations(fromISO: string, toISO: string) {
   try {
-    const h = headers();
-    const proto = h.get("x-forwarded-proto") ?? "http";
-    const host = h.get("host") ?? "localhost:3000";
-    const origin = `${proto}://${host}`;
     const p = new URLSearchParams({ from: fromISO, to: toISO });
-    const res = await fetch(`${origin}/api/reservations?${p.toString()}`, { cache: "force-cache" });
+    const res = await fetch(`/api/reservations?${p.toString()}`, {
+      cache: "no-store",
+      next: { revalidate: 0 },
+    });
     if (!res.ok) return [];
     return await res.json();
-  } catch {
+  } catch (e) {
+    console.error("Error getInitialReservations:", e);
     return [];
   }
 }
+
 
 export default async function ReservationsPage() {
   const now = new Date();

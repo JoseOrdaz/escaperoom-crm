@@ -24,7 +24,7 @@ export default function CustomersTable() {
 
   async function fetchCustomers() {
     try {
-      const res = await fetch("/api/customers", { cache: "force-cache" });
+      const res = await fetch("/api/customers", { cache: "no-store" });
       if (!res.ok) throw new Error(await res.text());
       const json = await res.json();
       setCustomers(json.items ?? []);

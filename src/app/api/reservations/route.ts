@@ -16,6 +16,7 @@ function safeObjectId(id?: string) {
   return /^[a-f0-9]{24}$/i.test(id) ? new ObjectId(id) : null;
 }
 
+/* ───────── schema ───────── */
 const postSchema = z.object({
   roomId: z.string().min(1),
   date: z.string().regex(YMD, "Fecha inválida"),
@@ -27,48 +28,65 @@ const postSchema = z.object({
   customerEmail: z.string().email().optional(),
   customerPhone: z.string().optional(),
   language: z.enum(["es", "en", "ru"]).default("es"),
-  // description: z.string().max(140).optional().default(""),
   notes: z.string().max(1000).optional().default(""),
   internalNotes: z.string().max(1000).optional().default(""),
   status: z.enum(["pendiente", "confirmada", "cancelada"]).default("pendiente"),
-
 });
+
+/* ───────── Caché en memoria (1 min) ───────── */
+// const cache = new Map<string, { data: any; timestamp: number }>();
+// async function getCached(key: string, fn: () => Promise<any>) {
+//   const cached = cache.get(key);
+//   if (cached && Date.now() - cached.timestamp < 60_000) {
+//     return cached.data;
+//   }
+//   const data = await fn();
+//   cache.set(key, { data, timestamp: Date.now() });
+//   return data;
+// }
 
 /* ───────── GET ───────── */
 export async function GET(req: Request) {
-  
   try {
     const { searchParams } = new URL(req.url);
-    
-    // ✅ estadísticas globales
-      if (searchParams.get("stats") === "1") {
-        const db = await connectDB();
 
-        // total histórico
-        const totalReservations = await db.collection("reservations").countDocuments();
+    // === Estadísticas globales ===
+    if (searchParams.get("stats") === "1") {
+      const db = await connectDB();
+      const [totalReservations, reservationsThisMonth] = await Promise.all([
+        db.collection("reservations").countDocuments(),
+        (() => {
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth(), 1);
+          const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          return db.collection("reservations").countDocuments({
+            start: { $gte: start, $lt: end },
+          });
+        })(),
+      ]);
 
-        // rango mes actual
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return NextResponse.json({ totalReservations, reservationsThisMonth });
+    }
 
-        const reservationsThisMonth = await db.collection("reservations").countDocuments({
-          start: { $gte: start, $lt: end },
-        });
-
-        return NextResponse.json({
-          totalReservations,
-          reservationsThisMonth,
-        });
-      }
-
+    // === Por cliente ===
     const customerId = searchParams.get("customerId");
     if (customerId) {
-      // 🔎 buscar reservas por cliente
       const db = await connectDB();
       const docs = await db
         .collection("reservations")
         .find({ customerId: safeObjectId(customerId) })
+        .project({
+          roomId: 1,
+          roomName: 1,
+          start: 1,
+          end: 1,
+          players: 1,
+          price: 1,
+          language: 1,
+          notes: 1,
+          internalNotes: 1,
+          status: 1,
+        })
         .sort({ start: -1 })
         .toArray();
 
@@ -82,16 +100,17 @@ export async function GET(req: Request) {
           players: d.players,
           price: d.price ?? 0,
           language: d.language ?? "es",
-          // description: d.description ?? "",
           notes: d.notes ?? "",
           internalNotes: d.internalNotes ?? "",
+          status: d.status ?? "pendiente",
         }))
       );
     }
 
-    // 🔥 modo original con rango from/to
+    // === Por rango de fechas ===
     const from = searchParams.get("from") ?? "";
     const to = searchParams.get("to") ?? "";
+    const roomId = safeObjectId(searchParams.get("roomId") ?? "");
 
     if (!YMD.test(from) || !YMD.test(to)) {
       return NextResponse.json(
@@ -104,48 +123,70 @@ export async function GET(req: Request) {
     const fromD = toDateAtLocal(from, "00:00");
     const toD = toDateAtLocal(to, "00:00");
 
-    const roomId = safeObjectId(searchParams.get("roomId") ?? "");
     const query: any = { start: { $gte: fromD }, end: { $lt: toD } };
 
     if (roomId) {
-      // obtener sala y vinculadas
       const room = await db.collection("rooms").findOne({ _id: roomId });
-      const linked = (room?.linkedRooms ?? []).map((id: string) => safeObjectId(id)).filter(Boolean);
+      const linked = (room?.linkedRooms ?? [])
+        .map((id: string) => safeObjectId(id))
+        .filter(Boolean);
       query.roomId = { $in: [roomId, ...linked] };
     }
 
+    // 🔥 consultas paralelas sin caché
     const docs = await db
       .collection("reservations")
       .find(query)
+      .project({
+        roomId: 1,
+        start: 1,
+        end: 1,
+        players: 1,
+        price: 1,
+        language: 1,
+        notes: 1,
+        internalNotes: 1,
+        status: 1,
+        customerId: 1,
+      })
       .sort({ start: 1 })
       .toArray();
 
-      
-
-    // 🔎 recolectar roomIds y customerIds
     const roomIds = [...new Set(docs.map((d: any) => String(d.roomId)))];
-    const custIds = [...new Set(docs.map((d: any) => String(d.customerId)).filter(Boolean))];
+    const custIds = [
+      ...new Set(docs.map((d: any) => String(d.customerId)).filter(Boolean)),
+    ];
 
-    const rooms = await db.collection("rooms")
-      .find(
-        { _id: { $in: roomIds.map(safeObjectId).filter((id): id is ObjectId => id !== null) } },
-        { projection: { _id: 1, name: 1 } }
-      )
-      .toArray();
-
-    const customers = custIds.length
-      ? await db.collection("customers")
-          .find(
-          { _id: { $in: custIds.map(safeObjectId).filter((id): id is ObjectId => id !== null) } },
-          { projection: { _id: 1, name: 1, email: 1, phone: 1 } }
-        )
-          .toArray()
-      : [];
+    const [rooms, customers] = await Promise.all([
+      db
+        .collection("rooms")
+        .find({
+          _id: {
+            $in: roomIds
+              .map(safeObjectId)
+              .filter((id): id is ObjectId => id !== null),
+          },
+        })
+        .project({ _id: 1, name: 1 })
+        .toArray(),
+      custIds.length
+        ? db
+            .collection("customers")
+            .find({
+              _id: {
+                $in: custIds
+                  .map(safeObjectId)
+                  .filter((id): id is ObjectId => id !== null),
+              },
+            })
+            .project({ _id: 1, name: 1, email: 1, phone: 1 })
+            .toArray()
+        : Promise.resolve([]),
+    ]);
 
     const roomMap = new Map(rooms.map((r) => [String(r._id), r.name]));
     const customerMap = new Map(customers.map((c) => [String(c._id), c]));
 
-    // 🔥 construir salida con cliente incluido
     const out = docs.map((d: any) => {
       const custId = d.customerId ? String(d.customerId) : null;
       const cust = custId ? customerMap.get(custId) : null;
@@ -159,7 +200,6 @@ export async function GET(req: Request) {
         players: d.players,
         price: d.price ?? 0,
         language: d.language ?? "es",
-        // description: d.description ?? "",
         notes: d.notes ?? "",
         internalNotes: d.internalNotes ?? "",
         status: d.status ?? "pendiente",
@@ -174,28 +214,17 @@ export async function GET(req: Request) {
       };
     });
 
-
-const occupied = docs.map((d: any) => {
-  const start = d.start instanceof Date
-    ? d.start.toISOString().substring(11, 16)
-    : new Date(d.start).toISOString().substring(11, 16);
-
-  const end = d.end instanceof Date
-    ? d.end.toISOString().substring(11, 16)
-    : new Date(d.end).toISOString().substring(11, 16);
-
-  return `${start}-${end}`;
-});
-
-
     return NextResponse.json(out);
   } catch (err: any) {
-    return NextResponse.json({ ok: false, error: err?.message ?? "Error" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "Error" },
+      { status: 500 }
+    );
   }
 }
 
+
 /* ───────── POST ───────── */
-// ⬇️ sin cambios, lo dejo igual
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -206,6 +235,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
     const v = parsed.data;
     const db = await connectDB();
 
@@ -219,10 +249,9 @@ export async function POST(req: Request) {
 
     const start = toDateAtLocal(v.date, v.start);
     const end = v.end ? toDateAtLocal(v.date, v.end) : addMinutes(start, room.durationMinutes ?? 60);
-
     const linkedRoomIds = (room.linkedRooms ?? []).map((id: string) => safeObjectId(id)).filter(Boolean);
 
-    // 🔒 comprobar conflictos en la sala y las vinculadas
+    // 🔒 comprobar conflictos
     const conflict = await db.collection("reservations").findOne({
       roomId: { $in: [roomId, ...linkedRoomIds] },
       start: { $lt: end },
@@ -268,7 +297,6 @@ export async function POST(req: Request) {
       players: v.players,
       price,
       language: v.language,
-      // description: v.description,
       notes: v.notes,
       internalNotes: v.internalNotes ?? "",
       ...(customerId ? { customerId } : {}),
