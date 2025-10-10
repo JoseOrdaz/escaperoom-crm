@@ -117,7 +117,7 @@ export default function LoginPage() {
                       <FormControl>
                         <div className="relative">
                           <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                          <Input placeholder="Correo electrónico" className="pl-9" {...field} />
+                          <Input placeholder="Usuario o correo electrónico" className="pl-9" {...field} />
                         </div>
                       </FormControl>
                       <FormMessage />
