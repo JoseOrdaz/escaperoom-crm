@@ -1,20 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import {
-  DoorOpen,
-  Clock3,
-  UserCog,
-  Calendar,
-} from "lucide-react";
+import { DoorOpen, Clock3, UserCog, Calendar, LogIn, LogOut } from "lucide-react";
 
 export function DashboardHeader() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<{ name?: string; role?: string } | null>(null);
+
+  // Leer sesión de la cookie (guardada como JSON)
+  useEffect(() => {
+    const cookie = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("session_user="));
+    if (cookie) {
+      try {
+        const value = decodeURIComponent(cookie.split("=")[1]);
+        const parsed = JSON.parse(value);
+        setUser(parsed);
+      } catch {
+        setUser(null);
+      }
+    }
+  }, []);
 
   const navLinks = [
     { href: "/dashboard/rooms", label: "Salas" },
@@ -107,18 +121,44 @@ export function DashboardHeader() {
 
         <Separator orientation="vertical" className="mx-3 h-6" />
 
-        {/* Usuario */}
+        {/* Usuario / Sesión */}
         <div className="flex items-center gap-2">
-          <Badge
-            variant="secondary"
-            className="hidden sm:flex items-center gap-1"
-          >
-            <UserCog className="mr-1 h-4 w-4" /> Admin
-          </Badge>
-          <Avatar className="h-8 w-8 border">
-            <AvatarImage src="/avatar-default.png" alt="Usuario actual" />
-            <AvatarFallback>AD</AvatarFallback>
-          </Avatar>
+          {user ? (
+            <>
+              <Badge variant="secondary" className="hidden sm:flex items-center gap-1">
+                <UserCog className="mr-1 h-4 w-4" /> {user.role || "Usuario"}
+              </Badge>
+              <Avatar className="h-8 w-8 border">
+                <AvatarImage src="/avatar-default.png" alt={user.name} />
+                <AvatarFallback>
+                  {user.name?.[0] ?? "U"}
+                </AvatarFallback>
+              </Avatar>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  document.cookie =
+                    "session_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                  router.push("/login");
+                }}
+              >
+                <LogOut className="w-4 h-4 mr-1" />
+                Cerrar sesión
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => router.push("/login")}
+              className="flex items-center gap-1"
+            >
+              <LogIn className="w-4 h-4 mr-1" />
+              Iniciar sesión
+            </Button>
+          )}
         </div>
       </div>
     </header>

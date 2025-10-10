@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -25,32 +25,55 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { motion } from "framer-motion";
-import { Lock, User, DoorOpen } from "lucide-react";
+import { Lock, User, DoorOpen, Info } from "lucide-react";
 
 const schema = z.object({
-  username: z.string().min(1, "Introduce el usuario"),
+  username: z.string().min(1, "Introduce el usuario o correo"),
   password: z.string().min(1, "Introduce la contraseña"),
 });
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { username: "", password: "" },
   });
 
-  async function onSubmit(values: z.infer<typeof schema>) {
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 600)); // pequeña espera fake
+  // 🧹 Limpiar sesión previa al entrar en login
+  useEffect(() => {
+    document.cookie = "session_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+  }, []);
 
-    if (values.username === "admin" && values.password === "Fobia2025!") {
-      toast.success("Bienvenido, Admin 👋");
-      router.push("/dashboard/rooms");
-    } else {
-      toast.error("Credenciales incorrectas");
+  // 🔐 Enviar login
+  async function onSubmit(values: z.infer<typeof schema>) {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      const json = await res.json();
+      setLoading(false);
+
+      if (res.ok && json.ok) {
+        toast.success(`Bienvenido ${json.user.name}`);
+        // Redirigir según rol
+        if (json.user.role === "admin") {
+          router.push("/dashboard/rooms");
+        } else {
+          router.push("/dashboard/bookings");
+        }
+      } else {
+        toast.error(json.error || "Credenciales incorrectas");
+      }
+    } catch (err) {
+      toast.error("Error de conexión");
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -84,24 +107,17 @@ export default function LoginPage() {
 
           <CardContent>
             <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-5"
-              >
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                 <FormField
                   control={form.control}
                   name="username"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Usuario</FormLabel>
+                      <FormLabel>Usuario o correo</FormLabel>
                       <FormControl>
                         <div className="relative">
                           <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                          <Input
-                            placeholder="admin"
-                            className="pl-9"
-                            {...field}
-                          />
+                          <Input placeholder="Correo electrónico" className="pl-9" {...field} />
                         </div>
                       </FormControl>
                       <FormMessage />
@@ -131,15 +147,25 @@ export default function LoginPage() {
                   )}
                 />
 
-                <Button
-                  type="submit"
-                  className="w-full mt-2"
-                  disabled={loading}
-                >
+                <Button type="submit" className="w-full mt-2" disabled={loading}>
                   {loading ? "Accediendo..." : "Entrar"}
                 </Button>
               </form>
             </Form>
+
+            {/* 🔹 Leyenda de demo */}
+            <div className="mt-5 border rounded-md bg-blue-50 dark:bg-blue-900/20 p-3 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
+              <Info className="w-4 h-4 mt-[1px]" />
+              <div>
+                <p className="font-semibold">Demo disponible</p>
+                <p>
+                  Usuario: <span className="font-mono text-sm">admin</span>
+                </p>
+                <p>
+                  Contraseña: <span className="font-mono text-sm">fobia2025!</span>
+                </p>
+              </div>
+            </div>
           </CardContent>
 
           <CardFooter className="text-center text-xs text-muted-foreground">

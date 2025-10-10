@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { ObjectId } from "mongodb";
+import bcrypt from "bcryptjs";
 
 export async function GET() {
   const db = await connectDB();
@@ -12,13 +13,19 @@ export async function POST(req: Request) {
   const db = await connectDB();
   const body = await req.json();
 
+  const hashedPassword = body.password
+    ? await bcrypt.hash(body.password, 10)
+    : null;
+
   const newEmp = {
     avatar: body.avatar || "",
     name: body.name,
     surname: body.surname,
     email: body.email,
-    role: body.role,
-    escape: body.escape || "Fobia", // 👈 nuevo campo
+    username: body.username || body.email?.split("@")[0] || "",
+    password: hashedPassword,
+    role: body.role || "game_master", 
+    escape: body.escape || "Fobia",
     weeklySchedule: body.weeklySchedule || {},
     checkins: [],
     createdAt: new Date(),
@@ -32,6 +39,12 @@ export async function PUT(req: Request) {
   const db = await connectDB();
   const body = await req.json();
   if (!body._id) return NextResponse.json({ error: "Falta ID" }, { status: 400 });
+
+  if (body.password) {
+  body.password = await bcrypt.hash(body.password, 10);
+} else {
+  delete body.password;
+}
 
   const id = new ObjectId(body._id);
   delete body._id;

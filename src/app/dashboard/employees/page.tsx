@@ -264,69 +264,81 @@ useEffect(() => {
                 </DialogHeader>
 
                 <div className="grid gap-3 py-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      placeholder="Nombre"
-                      value={form.name}
-                      onChange={(e) =>
-                        setForm({ ...form, name: e.target.value })
-                      }
-                    />
-                    <Input
-                      placeholder="Apellidos"
-                      value={form.surname}
-                      onChange={(e) =>
-                        setForm({ ...form, surname: e.target.value })
-                      }
-                    />
-                  </div>
-                  <Input
-                    placeholder="Email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Cargo"
-                    value={form.role}
-                    onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  />
+  <div className="grid grid-cols-2 gap-2">
+    <Input
+      placeholder="Nombre"
+      value={form.name}
+      onChange={(e) => setForm({ ...form, name: e.target.value })}
+    />
+    <Input
+      placeholder="Apellidos"
+      value={form.surname}
+      onChange={(e) => setForm({ ...form, surname: e.target.value })}
+    />
+  </div>
 
-                  <Select
-                    value={form.escape}
-                    onValueChange={(v) => setForm({ ...form, escape: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Escape asociado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Fobia">🏠 Fobia</SelectItem>
-                      <SelectItem value="Action Gates">
-                        🚪 Action Gates
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+  <Input
+    placeholder="Email"
+    value={form.email}
+    onChange={(e) => setForm({ ...form, email: e.target.value })}
+  />
 
-                  <DialogFooter className="flex justify-end gap-2 mt-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setForm(emptyForm);
-                        setEditing(null);
-                        setOpenModal(false);
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button onClick={saveEmployee}>
-                      {editing ? (
-                        <Save className="w-4 h-4 mr-1" />
-                      ) : (
-                        <Plus className="w-4 h-4 mr-1" />
-                      )}
-                      {editing ? "Guardar cambios" : "Crear empleado"}
-                    </Button>
-                  </DialogFooter>
-                </div>
+  <Input
+    placeholder="Usuario (opcional)"
+    value={form.username || ""}
+    onChange={(e) => setForm({ ...form, username: e.target.value })}
+  />
+
+  <Input
+    type="password"
+    placeholder="Contraseña"
+    value={form.password || ""}
+    onChange={(e) => setForm({ ...form, password: e.target.value })}
+  />
+
+  <Select
+    value={form.role}
+    onValueChange={(v) => setForm({ ...form, role: v })}
+  >
+    <SelectTrigger>
+      <SelectValue placeholder="Rol del empleado" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="admin">🧩 Administrador</SelectItem>
+      <SelectItem value="game_master">🎮 Game Master</SelectItem>
+    </SelectContent>
+  </Select>
+
+  <Select
+    value={form.escape}
+    onValueChange={(v) => setForm({ ...form, escape: v })}
+  >
+    <SelectTrigger>
+      <SelectValue placeholder="Escape asociado" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="Fobia">🏠 Fobia</SelectItem>
+      <SelectItem value="Action Gates">🚪 Action Gates</SelectItem>
+    </SelectContent>
+  </Select>
+
+  <DialogFooter className="flex justify-end gap-2 mt-3">
+    <Button
+      variant="outline"
+      onClick={() => {
+        setForm(emptyForm);
+        setEditing(null);
+        setOpenModal(false);
+      }}
+    >
+      Cancelar
+    </Button>
+    <Button onClick={saveEmployee}>
+      {editing ? "Guardar cambios" : "Crear empleado"}
+    </Button>
+  </DialogFooter>
+</div>
+
               </DialogContent>
             </Dialog>
               </div>
