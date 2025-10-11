@@ -9,7 +9,7 @@ import { z } from "zod";
 import confetti from "canvas-confetti";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,7 +23,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, DoorOpen, Clock, FileText, UserCog, Users, User, Mail, MessageCircle, RotateCcw, FileDown, MessageSquare, Phone, CalendarDays } from "lucide-react";
+import { CalendarDay } from "react-day-picker";
 
 /* ───────── Types ───────── */
 type Room = {
@@ -46,7 +47,7 @@ const schema = z.object({
   phone: z.string().min(6, "Teléfono requerido"),
   notes: z.string().max(500).optional(),
   acceptPrivacy: z.literal(true, {
-    errorMap: () => ({ message: "Debes aceptar la política de privacidad" }),
+    message: "Debes aceptar la política de privacidad",
   }),
 });
 type ClientFormValues = z.infer<typeof schema>;
@@ -127,23 +128,23 @@ export default function BookingWizard({
 
   /* ───────── Cargar salas (solo si no vienen por props) ───────── */
   useEffect(() => {
-  if (roomsProp && roomsProp.length > 0) {
-    setRooms(roomsProp);
-    return;
-  }
+    if (roomsProp && roomsProp.length > 0) {
+      setRooms(roomsProp);
+      return;
+    }
 
-  fetch("/api/rooms")
-    .then((r) => r.json())
-    .then((allRooms) => {
-      if (roomIds && roomIds.length > 0) {
-        const filtered = allRooms.filter((r: Room) => roomIds.includes(r._id));
-        setRooms(filtered);
-      } else {
-        setRooms(allRooms);
-      }
-    })
-    .catch(() => toast.error("Error cargando salas"));
-}, [roomsProp, roomIds]);
+    fetch("/api/rooms")
+      .then((r) => r.json())
+      .then((allRooms) => {
+        if (roomIds && roomIds.length > 0) {
+          const filtered = allRooms.filter((r: Room) => roomIds.includes(r._id));
+          setRooms(filtered);
+        } else {
+          setRooms(allRooms);
+        }
+      })
+      .catch(() => toast.error("Error cargando salas"));
+  }, [roomsProp, roomIds]);
 
 
   /* ───────── Cargar reservas ───────── */
@@ -229,7 +230,6 @@ export default function BookingWizard({
           end,
           players,
           language: "es",
-          // description: "",
           notes: values.notes,
           customerName: `${values.firstName} ${values.lastName}`.trim(),
           customerEmail: values.email,
@@ -257,8 +257,11 @@ export default function BookingWizard({
 
       toast.success("¡Reserva confirmada!", {
         id: t,
-        description: json?._id ? `Localizador #${json._id}` : undefined,
+        description: json?.room?.name
+          ? `Sala: ${json.room.name} • ${new Date(json.date).toLocaleDateString()} • ${json.start} - ${json.end}`
+          : `Reserva realizada correctamente`,
       });
+
 
       goNext(5);
       setTimeout(() => confetti({ particleCount: 120, spread: 90, origin: { y: 0.6 } }), 500);
@@ -296,74 +299,162 @@ export default function BookingWizard({
   return (
     <div className="mx-auto max-w-6xl p-6 flex gap-8">
       {step < 5 && (
-        <div className="w-64">
-          <ul className="space-y-4">
+        <aside className="w-56 md:block">
+          <ul className="space-y-3">
             {steps.map((s, i) => {
               const index = i + 1;
               const active = step === index;
               const done = completedSteps.includes(index);
+
               return (
                 <li
                   key={s.label}
                   onClick={() => goToStep(index)}
                   className={cn(
-                    "flex flex-col border-l-2 pl-3 transition-colors cursor-pointer",
-                    active && "border-primary text-primary font-semibold",
-                    done && "border-green-500 text-green-600 hover:text-primary"
+                    "group relative flex flex-col rounded-lg px-4 py-3 border transition-all duration-200 cursor-pointer shadow-sm",
+                    active
+                      ? "border-primary/60 bg-primary/5 text-primary font-semibold"
+                      : done
+                        ? "border-green-400/40 bg-green-50/60 dark:bg-green-900/10 text-green-600 hover:bg-green-50/80"
+                        : "border-muted hover:border-primary/30 hover:bg-muted/40"
                   )}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     {done ? (
                       <CheckCircle2 className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <span className="w-4 h-4 rounded-full border flex items-center justify-center text-xs">
+                    ) : active ? (
+                      <div className="w-5 h-5 rounded-full border-2 border-primary flex items-center justify-center text-xs font-semibold text-primary bg-white dark:bg-slate-900">
                         {index}
-                      </span>
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full border text-xs flex items-center justify-center text-muted-foreground">
+                        {index}
+                      </div>
                     )}
-                    <span>{s.label}</span>
+                    <div className="flex flex-col">
+                      <span
+                        className={cn(
+                          "text-sm transition-colors",
+                          active && "text-primary font-medium",
+                          done && "text-green-700"
+                        )}
+                      >
+                        {s.label}
+                      </span>
+                      {s.info && (
+                        <span className="text-xs text-muted-foreground truncate">
+                          {s.info}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {s.info && (
-                    <span className="ml-7 text-xs text-muted-foreground truncate">{s.info}</span>
-                  )}
                 </li>
               );
             })}
           </ul>
-        </div>
+        </aside>
       )}
 
       {/* Contenido principal */}
       <div className="flex-1">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-xl font-bold">Reserva tu sala</CardTitle>
-          </CardHeader>
+          {/* <CardHeader className="text-center sm:text-left space-y-2 bg-gradient-to-r from-primary/5 to-transparent rounded-t-2xl p-6 border-b border-border/40">
+  <CardTitle className="flex items-center gap-2 text-2xl font-semibold text-foreground tracking-tight">
+    <CalendarDays className="w-6 h-6 text-primary" />
+    Reserva tu sala
+  </CardTitle>
+  <CardDescription className="text-base text-muted-foreground leading-relaxed">
+    Completa el formulario para reservar tu sala de escape
+  </CardDescription>
+</CardHeader> */}
+
           <CardContent>
             {/* Paso 1: Sala */}
             {step === 1 && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <h2 className="font-bold text-lg">Selecciona una sala</h2>
-                <div className="grid sm:grid-cols-3 gap-4 mt-4">
-                  {rooms.map((r) => (
-                    <Card
-                      key={r._id}
-                      className="cursor-pointer hover:shadow-lg border-primary/30"
-                      onClick={() => {
-                        setRoomId(r._id);
-                        goNext(2);
-                      }}
-                    >
-                      <CardContent className="p-4">
-                        {r.imageUrl && (
-                          <img src={r.imageUrl} alt={r.name} className="rounded-md mb-2" />
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                <div className="text-center sm:text-left">
+                  <h2 className="text-2xl font-semibold text-primary tracking-tight flex items-center gap-2">
+                    <DoorOpen className="w-6 h-6 text-primary/80" />
+                    Selecciona una sala
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Elige una de las salas disponibles para tu reserva
+                  </p>
+                </div>
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {rooms.map((r) => {
+                    const selected = roomId === r._id;
+                    return (
+                      <Card
+                        key={r._id}
+                        onClick={() => {
+                          setRoomId(r._id);
+                          goNext(2);
+                        }}
+                        className={cn(
+                          "relative cursor-pointer overflow-hidden rounded-2xl border transition-all duration-300 ease-out group py-0",
+                          selected
+                            ? "border-primary/60 bg-primary/10 shadow-xl scale-[1.02]"
+                            : "border-muted/30 hover:border-primary/40 hover:shadow-lg hover:scale-[1.01]"
                         )}
-                        <p className="font-medium">{r.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {r.capacityMin}–{r.capacityMax} jugadores
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ))}
+                      >
+                        {/* Imagen con overlay */}
+                        <div className="relative h-44 overflow-hidden">
+                          {r.imageUrl ? (
+                            <img
+                              src={r.imageUrl}
+                              alt={r.name}
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center bg-muted text-muted-foreground">
+                              <DoorOpen className="w-8 h-8" />
+                            </div>
+                          )}
+
+                          {/* Overlay degradado */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+
+
+                        </div>
+
+                        {/* Contenido */}
+                        <CardContent className="relative z-10 p-5 dark:bg-slate-900/50 rounded-b-2xl">
+                          <div className="flex items-center justify-between mb-1">
+                            <p
+                              className={cn(
+                                "font-semibold text-lg tracking-tight truncate",
+                                selected && "text-primary"
+                              )}
+                            >
+                              {r.name}
+                            </p>
+                            {selected && (
+                              <CheckCircle2 className="w-5 h-5 text-primary animate-pulse" />
+                            )}
+                          </div>
+
+                          <p className="text-sm text-muted-foreground mb-3">
+                            {r.capacityMin}–{r.capacityMax} jugadores
+                          </p>
+
+
+                        </CardContent>
+
+                        {/* Efecto glow al seleccionar */}
+                        {selected && (
+                          <div className="absolute inset-0 rounded-2xl ring-2 ring-primary/50 shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)] pointer-events-none" />
+                        )}
+                      </Card>
+
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
@@ -371,7 +462,15 @@ export default function BookingWizard({
             {/* Paso 2: Jugadores */}
             {step === 2 && selectedRoom && (
               <motion.div initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
-                <h2 className="font-bold text-lg mb-4">¿Cuántos jugadores?</h2>
+                <div className="text-center sm:text-left mb-5">
+                  <h2 className="text-2xl font-semibold text-primary tracking-tight flex items-center gap-2">
+                    <DoorOpen className="w-6 h-6 text-primary/80" />
+                    ¿Cuántos jugadores?
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Selecciona el número de jugadores para tu reserva
+                  </p>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {selectedRoom.priceTable.map((p) => {
                     const pricePerPlayer = (p.price / p.players).toFixed(2);
@@ -403,11 +502,18 @@ export default function BookingWizard({
               </motion.div>
             )}
 
-
             {/* Paso 3: Fecha y hora */}
             {step === 3 && selectedRoom && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <h2 className="font-bold text-lg mb-4 text-center">Elige fecha y hora</h2>
+                <div className="text-center sm:text-left mb-5">
+                  <h2 className="text-2xl font-semibold text-primary tracking-tight flex items-center gap-2">
+                    <DoorOpen className="w-6 h-6 text-primary/80" />
+                    Elige fecha y hora
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Selecciona la fecha y hora para tu reserva
+                  </p>
+                </div>
                 <div className="max-w-md mx-auto">
                   <Calendar
                     mode="single"
@@ -430,19 +536,19 @@ export default function BookingWizard({
                 </div>
 
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-6 rounded-xl bg-muted/30 px-6 py-4 shadow-sm border border-border/50">
-  <div className="flex items-center gap-2">
-    <span className="w-4 h-4 rounded-md bg-green-400/80 shadow-sm ring-1 ring-green-600/40" />
-    <span className="text-sm text-muted-foreground font-medium">Todas disponibles</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <span className="w-4 h-4 rounded-md bg-yellow-300/80 shadow-sm ring-1 ring-yellow-600/40" />
-    <span className="text-sm text-muted-foreground font-medium">Algunas libres</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <span className="w-4 h-4 rounded-md bg-red-400/80 shadow-sm ring-1 ring-red-600/40" />
-    <span className="text-sm text-muted-foreground font-medium">No quedan / Cerrado</span>
-  </div>
-</div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-md bg-green-400/80 shadow-sm ring-1 ring-green-600/40" />
+                    <span className="text-sm text-muted-foreground font-medium">Todas disponibles</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-md bg-yellow-300/80 shadow-sm ring-1 ring-yellow-600/40" />
+                    <span className="text-sm text-muted-foreground font-medium">Algunas libres</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-md bg-red-400/80 shadow-sm ring-1 ring-red-600/40" />
+                    <span className="text-sm text-muted-foreground font-medium">No quedan / Cerrado</span>
+                  </div>
+                </div>
 
 
                 {date && (
@@ -479,138 +585,313 @@ export default function BookingWizard({
 
             {/* Paso 4: Datos */}
             {step === 4 && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <h2 className="font-bold text-lg mb-4">Tus datos</h2>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <div className="grid sm:grid-cols-2 gap-4">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="max-w-3xl mx-auto"
+              >
+                <h2 className="text-2xl font-semibold text-primary mb-2 flex items-center gap-2">
+                  <UserCog className="w-6 h-6 text-primary/80" />
+                  Tus datos
+                </h2>
+                <p className="text-muted-foreground mb-6 text-sm">
+                  Completa tus datos personales para confirmar la reserva
+                </p>
+
+                <Card className="p-6 border border-border/50 bg-card/70 backdrop-blur-sm shadow-sm rounded-2xl">
+                  <Form {...form}>
+                    <form
+                      onSubmit={form.handleSubmit(onSubmit)}
+                      className="space-y-6"
+                    >
+                      {/* Nombre y Apellidos */}
+                      <div className="grid sm:grid-cols-2 gap-5">
+                        <FormField
+                          control={form.control}
+                          name="firstName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium">Nombre *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="Tu nombre"
+                                  className="h-10 rounded-md border border-border/50 focus:ring-2 focus:ring-primary/30 transition"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="lastName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium">Apellidos *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  placeholder="Tus apellidos"
+                                  className="h-10 rounded-md border border-border/50 focus:ring-2 focus:ring-primary/30 transition"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Email y Teléfono */}
+                      <div className="grid sm:grid-cols-2 gap-5">
+                        <FormField
+                          control={form.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium">Email *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="email"
+                                  {...field}
+                                  placeholder="ejemplo@correo.com"
+                                  className="h-10 rounded-md border border-border/50 focus:ring-2 focus:ring-primary/30 transition"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="phone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium">Teléfono *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="tel"
+                                  {...field}
+                                  placeholder="600 123 456"
+                                  className="h-10 rounded-md border border-border/50 focus:ring-2 focus:ring-primary/30 transition"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Notas */}
                       <FormField
                         control={form.control}
-                        name="firstName"
+                        name="notes"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Nombre *</FormLabel>
-                            <FormControl><Input {...field} /></FormControl>
+                            <FormLabel className="text-sm font-medium">
+                              Observaciones o detalles (edad, evento, etc.)
+                            </FormLabel>
+                            <FormControl>
+                              <Textarea
+                                rows={3}
+                                {...field}
+                                placeholder="Ejemplo: cumpleaños de 12 años, grupo de 6 jugadores..."
+                                className="rounded-md border border-border/50 focus:ring-2 focus:ring-primary/30 transition resize-none"
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+
+                      {/* Checkbox privacidad */}
                       <FormField
                         control={form.control}
-                        name="lastName"
+                        name="acceptPrivacy"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Apellidos *</FormLabel>
-                            <FormControl><Input {...field} /></FormControl>
+                          <FormItem className="flex items-start gap-3">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                className="mt-1 data-[state=checked]:bg-primary data-[state=checked]:text-white transition"
+                              />
+                            </FormControl>
+                            <FormLabel className="block text-sm text-muted-foreground leading-relaxed max-w-2xl">
+                              Acepto la{" "}
+                              <a
+                                href="/privacidad"
+                                target="_blank"
+                                className="underline text-primary hover:text-primary/80"
+                              >
+                                política de privacidad
+                              </a>
+                              , y consiento el tratamiento de mis datos personales con la finalidad de
+                              gestionar mi reserva y la comunicación relacionada con la misma.
+                            </FormLabel>
+
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email *</FormLabel>
-                            <FormControl><Input type="email" {...field} /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="phone"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Teléfono *</FormLabel>
-                            <FormControl><Input type="tel" {...field} /></FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <FormField
-                      control={form.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>¿Son adultos o menores?, ¿Cuántos años tienen los menores?, ¿Es para un evento?, etc...</FormLabel>
-                          <FormControl><Textarea rows={3} {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="acceptPrivacy"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center gap-2">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormLabel className="font-normal">
-                            Acepto la{" "}
-                            <a href="/privacidad" target="_blank" className="underline">
-                              política de privacidad
-                            </a>
-                          </FormLabel>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" className="w-full">
-                      Confirmar reserva
-                    </Button>
-                  </form>
-                </Form>
+
+                      {/* Botón enviar */}
+                      <Button
+                        type="submit"
+                        className="w-full py-5 text-base font-medium shadow-md hover:shadow-lg transition"
+                      >
+                        Confirmar reserva
+                      </Button>
+                    </form>
+                  </Form>
+                </Card>
               </motion.div>
             )}
 
+
             {/* Paso 5: Confirmación */}
             {step === 5 && confirmedReservation && (
-              <motion.div initial={{ opacity: 0.9 }} animate={{ opacity: 1 }}>
-                <h2 className="text-center text-2xl font-bold text-green-600">
-                  🎉 ¡Reserva confirmada!
-                </h2>
-                <Card className="mt-4">
-                  <CardContent className="space-y-2 p-4 text-sm">
-                    <p><strong>Localizador:</strong> {confirmedReservation._id}</p>
-                    <p><strong>Sala:</strong> {confirmedReservation.room?.name}</p>
-                    <p><strong>Fecha:</strong> {new Date(confirmedReservation.date).toLocaleDateString()}</p>
-                    <p><strong>Hora:</strong> {confirmedReservation.start} – {confirmedReservation.end}</p>
-                    <p><strong>Jugadores:</strong> {confirmedReservation.players}</p>
-                    <p><strong>Cliente:</strong> {confirmedReservation.customer.name}</p>
-                    <p><strong>Email:</strong> {confirmedReservation.customer.email}</p>
-                    <p><strong>Teléfono:</strong> {confirmedReservation.customer.phone}</p>
-                    {confirmedReservation.notes && <p><strong>Notas:</strong> {confirmedReservation.notes}</p>}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4 }}
+                className="text-center max-w-xl mx-auto"
+              >
+                {/* Header */}
+                <div className="flex flex-col items-center mb-6">
+                  <div className="flex items-center justify-center w-16 h-16 rounded-full bg-green-500/10 text-green-600 mb-3">
+                    <CheckCircle2 className="w-10 h-10" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-green-600">
+                    ¡Reserva confirmada!
+                  </h2>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    Hemos recibido tu reserva correctamente. A continuación verás los detalles.
+                  </p>
+                </div>
+
+                {/* Tarjeta con detalles */}
+                <Card className="border border-border/40 shadow-sm bg-card/70 backdrop-blur-sm rounded-2xl">
+                  <CardContent className="p-6 text-left text-sm space-y-3">
+                    <div className="grid sm:grid-cols-2 gap-y-3 gap-x-6">
+                      {/* <p className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-muted-foreground" />
+                        <strong>Localizador:</strong>{" "}
+                        <span className="text-muted-foreground">{confirmedReservation._id}</span>
+                      </p> */}
+
+                      <p className="flex items-center gap-2">
+                        <DoorOpen className="w-4 h-4 text-muted-foreground" />
+                        <strong>Sala:</strong>{" "}
+                        <span className="text-muted-foreground">{confirmedReservation.room?.name}</span>
+                      </p>
+
+                      <p className="flex items-center gap-2">
+                        <CalendarDays className="w-4 h-4 text-muted-foreground" />
+                        <strong>Fecha:</strong>{" "}
+                        <span className="text-muted-foreground">
+                          {new Date(confirmedReservation.date).toLocaleDateString()}
+                        </span>
+                      </p>
+
+                      <p className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-muted-foreground" />
+                        <strong>Hora:</strong>{" "}
+                        <span className="text-muted-foreground">
+                          {confirmedReservation.start} – {confirmedReservation.end}
+                        </span>
+                      </p>
+
+                      <p className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-muted-foreground" />
+                        <strong>Jugadores:</strong>{" "}
+                        <span className="text-muted-foreground">{confirmedReservation.players}</span>
+                      </p>
+
+                      <p className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        <strong>Cliente:</strong>{" "}
+                        <span className="text-muted-foreground">{confirmedReservation.customer.name}</span>
+                      </p>
+
+                      <p className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        <strong>Email:</strong>{" "}
+                        <span className="text-muted-foreground">{confirmedReservation.customer.email}</span>
+                      </p>
+
+                      <p className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <strong>Teléfono:</strong>{" "}
+                        <span className="text-muted-foreground">{confirmedReservation.customer.phone}</span>
+                      </p>
+
+                      {confirmedReservation.notes && (
+                        <p className="sm:col-span-2 flex items-start gap-2">
+                          <MessageSquare className="w-4 h-4 text-muted-foreground mt-1" />
+                          <span>
+                            <strong>Notas/Información:</strong>{" "}
+                            <span className="text-muted-foreground">{confirmedReservation.notes}</span>
+                          </span>
+                        </p>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
-                <div className="flex justify-center gap-4 mt-6">
-                  <Button
-                    onClick={() =>
-                      window.open(
-                        `https://wa.me/?text=Reserva confirmada en ${confirmedReservation.room?.name
-                        } el ${new Date(
-                          confirmedReservation.date
-                        ).toLocaleDateString()} a las ${confirmedReservation.start
-                        }. Localizador: ${confirmedReservation._id}`
-                      )
-                    }
-                  >
-                    WhatsApp
+
+                {/* Botones de acción */}
+                <div className="flex flex-wrap justify-center gap-4 mt-8">
+<Button
+  onClick={() => {
+    const fecha = new Date(confirmedReservation.date).toLocaleDateString("es-ES", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+    });
+
+    // Usa emojis normales aquí — no codificados
+    const mensaje = `
+🎉 *¡Reserva confirmada!*
+🏠 *Sala:* ${confirmedReservation.room?.name}
+📅 *Fecha:* ${fecha}
+⏰ *Hora:* ${confirmedReservation.start} – ${confirmedReservation.end}
+👥 *Jugadores:* ${confirmedReservation.players}
+
+¡Nos vemos pronto en el escape room! 🔐
+`;
+
+    // Codificamos todo el texto una sola vez
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(mensaje.trim())}`;
+    window.open(url, "_blank");
+  }}
+  className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-2 px-5 py-2.5 rounded-md shadow-md transition-all"
+>
+  <MessageCircle className="w-4 h-4" />
+  Enviar por WhatsApp
+</Button>
+
+
+
+
+
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <FileDown className="w-4 h-4" />
+                    Descargar PDF
                   </Button>
-                  <Button variant="outline">Descargar PDF</Button>
-                  <Button variant="secondary" onClick={resetWizard}>
-                    Hacer otra reserva
+
+                  <Button
+                    variant="secondary"
+                    onClick={resetWizard}
+                    className="flex items-center gap-2"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Nueva reserva
                   </Button>
                 </div>
               </motion.div>
             )}
+
           </CardContent>
         </Card>
       </div>

@@ -16,10 +16,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <CalendarDays className="h-6 w-6 text-primary" />
           Demo de Reservas para Clientes
         </h1>
-        <p className="text-sm text-muted-foreground max-w-2xl">
+        {/* <p className="text-sm text-muted-foreground max-w-2xl">
           Este módulo representa el sistema de reservas que se integrará en la web pública,
           permitiendo a los clientes seleccionar sala, fecha y hora de forma intuitiva.
-        </p>
+        </p> */}
       </div>
         {children}
                 <Analytics />
