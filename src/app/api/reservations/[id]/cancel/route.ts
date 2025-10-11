@@ -2,13 +2,25 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 
+/* ───────── GET o POST ───────── */
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  return cancelReservation(params.id);
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { id: string } }
 ) {
+  return cancelReservation(params.id);
+}
+
+/* ───────── Lógica común ───────── */
+async function cancelReservation(reservationId: string) {
   try {
     const db = await connectDB();
-    const reservationId = params.id;
 
     if (!ObjectId.isValid(reservationId)) {
       return NextResponse.json(
@@ -23,14 +35,13 @@ export async function POST(
     );
 
     if (result.modifiedCount === 0) {
-      return NextResponse.json(
-        { ok: false, error: "Reserva no encontrada o ya cancelada" },
-        { status: 404 }
-      );
+      // Si no existe o ya estaba cancelada
+      return NextResponse.redirect("https://escaperoom-crm.vercel.app/cancelacion-error");
     }
 
-    return NextResponse.json({ ok: true, message: "Reserva cancelada" });
-  } catch (err: any) {
+    // ✅ Redirigir a página de confirmación visual dentro del CRM
+    return NextResponse.redirect("https://escaperoom-crm.vercel.app/cancelada");
+  } catch (err) {
     console.error("Error cancelando reserva:", err);
     return NextResponse.json(
       { ok: false, error: "Error al cancelar la reserva" },
