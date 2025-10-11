@@ -296,10 +296,19 @@ export default function BookingWizard({
     { label: "Confirmación", info: "" },
   ];
 
+  /* ───────── Scroll al inicio al cambiar de paso ───────── */
+  useEffect(() => {
+    // Solo aplica en pantallas pequeñas (móviles)
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [step]);
+
+
   return (
-    <div className="mx-auto max-w-6xl p-6 flex gap-8">
+    <div className="mx-auto max-w-6xl md:p-6 flex gap-8">
       {step < 5 && (
-        <aside className="w-56 md:block">
+        <aside className="hidden md:block w-56 shrink-0">
           <ul className="space-y-3">
             {steps.map((s, i) => {
               const index = i + 1;
@@ -808,7 +817,18 @@ export default function BookingWizard({
                         <strong>Jugadores:</strong>{" "}
                         <span className="text-muted-foreground">{confirmedReservation.players}</span>
                       </p>
-
+                      <p className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-muted-foreground" />
+                        <strong>Precio total:</strong>{" "}
+                        <span className="text-muted-foreground">
+                          {(
+                            confirmedReservation.room?.priceTable.find(
+                              (p) => p.players === confirmedReservation.players
+                            )?.price ?? 0
+                          ).toFixed(2)}{" "}
+                          €
+                        </span>
+                      </p>
                       <p className="flex items-center gap-2">
                         <User className="w-4 h-4 text-muted-foreground" />
                         <strong>Cliente:</strong>{" "}
@@ -842,34 +862,41 @@ export default function BookingWizard({
 
                 {/* Botones de acción */}
                 <div className="flex flex-wrap justify-center gap-4 mt-8">
-<Button
-  onClick={() => {
-    const fecha = new Date(confirmedReservation.date).toLocaleDateString("es-ES", {
-      weekday: "long",
-      day: "2-digit",
-      month: "long",
-    });
+                  <Button
+                    onClick={() => {
+                      const fecha = new Date(confirmedReservation.date).toLocaleDateString("es-ES", {
+                        weekday: "long",
+                        day: "2-digit",
+                        month: "long",
+                      });
 
-    // Usa emojis normales aquí — no codificados
-    const mensaje = `
-🎉 *¡Reserva confirmada!*
-🏠 *Sala:* ${confirmedReservation.room?.name}
-📅 *Fecha:* ${fecha}
-⏰ *Hora:* ${confirmedReservation.start} – ${confirmedReservation.end}
-👥 *Jugadores:* ${confirmedReservation.players}
+                      const precio = (
+                        confirmedReservation.room?.priceTable.find(
+                          (p) => p.players === confirmedReservation.players
+                        )?.price ?? 0
+                      ).toFixed(2);
 
-¡Nos vemos pronto en el escape room! 🔐
-`;
+                      // Usa emojis normales aquí — no codificados
+                      const mensaje = [
+                        "🎉 *¡Reserva confirmada!*",
+                        `🏠 *Sala:* ${confirmedReservation.room?.name}`,
+                        `📅 *Fecha:* ${fecha}`,
+                        `⏰ *Hora:* ${confirmedReservation.start} – ${confirmedReservation.end}`,
+                        `👥 *Jugadores:* ${confirmedReservation.players}`,
+                        `💶 *Precio total:* ${precio} €`,
+                        "",
+                        "¡Nos vemos pronto en el escape room! 🔐",
+                      ].join("\n");
 
-    // Codificamos todo el texto una sola vez
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(mensaje.trim())}`;
-    window.open(url, "_blank");
-  }}
-  className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-2 px-5 py-2.5 rounded-md shadow-md transition-all"
->
-  <MessageCircle className="w-4 h-4" />
-  Enviar por WhatsApp
-</Button>
+                      // Codificamos todo el texto una sola vez
+                      const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(mensaje.trim())}`;
+                      window.open(url, "_blank");
+                    }}
+                    className="bg-green-500 hover:bg-green-600 text-white flex items-center gap-2 px-5 py-2.5 rounded-md shadow-md transition-all"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Enviar por WhatsApp
+                  </Button>
 
 
 
