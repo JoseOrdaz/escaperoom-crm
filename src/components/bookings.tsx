@@ -1026,10 +1026,6 @@ export default function BookingWizard({
                     Enviar por WhatsApp
                   </Button>
 
-
-
-
-
                   {/* <Button variant="outline" className="flex items-center gap-2">
                     <FileDown className="w-4 h-4" />
                     Descargar PDF

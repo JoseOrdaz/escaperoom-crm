@@ -337,11 +337,16 @@ const isFobia =
   roomName.includes("academia de houdini") ||
   roomName.includes("casa de los fantasmas");
 
+  const [year, month, day] = v.date.split("-");
+  const fechaBonita = `${day}/${month}/${year}`;
+
   // Datos comunes
   const cliente = v.customerName?.split(" ")[0] ?? "jugador/a";
-  const fechaHora = `${v.date} – ${v.start}${v.end ? " a " + v.end : ""}`;
+  const fechaHora = `${fechaBonita} – ${v.start}${v.end ? " a " + v.end : ""}`;
   const jugadores = `${v.players} jugadores`;
   const precio = (room.priceTable?.find(p => p.players === v.players)?.price ?? 0).toFixed(2);
+
+  
 
   // 🧩 Plantillas HTML
   const fobiaHTML = `
