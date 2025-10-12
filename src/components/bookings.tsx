@@ -263,7 +263,7 @@ export default function BookingWizard({
       });
 
 
-      goNext(5);
+      goNext(6);
       setTimeout(() => confetti({ particleCount: 120, spread: 90, origin: { y: 0.6 } }), 500);
     } catch (e: any) {
       toast.error("No se pudo crear la reserva", { id: t, description: e.message });
@@ -293,6 +293,7 @@ export default function BookingWizard({
         ? `${form.getValues("firstName")} ${form.getValues("lastName")}`
         : "",
     },
+    { label: "Resumen", info: "" },
     { label: "Confirmación", info: "" },
   ];
 
@@ -536,15 +537,14 @@ export default function BookingWizard({
                       disabled: (d) => getDayStatus(d) === "disabled",
                     }}
                     modifiersClassNames={{
-                      green: "bg-green-100 text-green-800 rounded-md hover:bg-green-200 m-1",
-                      yellow: "bg-yellow-100 text-yellow-800 rounded-md hover:bg-yellow-200 m-1",
-                      red: "bg-red-100 text-red-800 rounded-md m-1",
-                      disabled: "opacity-40 pointer-events-none m-1",
+                      green: "bg-green-100 text-green-800 rounded-md hover:bg-green-200 md:m-1 m-0.5",
+                      yellow: "bg-yellow-100 text-yellow-800 rounded-md hover:bg-yellow-200 md:m-1 m-0.5",
+                      red: "bg-red-100 text-red-800 rounded-md md:m-1 m-0.5",
+                      disabled: "opacity-40 pointer-events-none md:m-1 m-0.5",
                     }}
                   />
                 </div>
-
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-6 rounded-xl bg-muted/30 px-6 py-4 shadow-sm border border-border/50">
+                <div className="hidden md:flex mt-6 flex-wrap items-center justify-center gap-6 rounded-xl bg-muted/30 px-6 py-4 shadow-sm border border-border/50">
                   <div className="flex items-center gap-2">
                     <span className="w-4 h-4 rounded-md bg-green-400/80 shadow-sm ring-1 ring-green-600/40" />
                     <span className="text-sm text-muted-foreground font-medium">Todas disponibles</span>
@@ -608,7 +608,7 @@ export default function BookingWizard({
                   Completa tus datos personales para confirmar la reserva
                 </p>
 
-                <Card className="p-6 border border-border/50 bg-card/70 backdrop-blur-sm shadow-sm rounded-2xl">
+                <Card className="p-4 md:p-6 border border-border/50 bg-card/70 backdrop-blur-sm shadow-sm rounded-2xl">
                   <Form {...form}>
                     <form
                       onSubmit={form.handleSubmit(onSubmit)}
@@ -745,22 +745,150 @@ export default function BookingWizard({
                         )}
                       />
 
-                      {/* Botón enviar */}
                       <Button
-                        type="submit"
+                        type="button"
+                        onClick={async () => {
+                          const isValid = await form.trigger(); // valida el formulario
+                          if (isValid) goNext(5);
+                        }}
                         className="w-full py-5 text-base font-medium shadow-md hover:shadow-lg transition"
                       >
-                        Confirmar reserva
+                        Siguiente
                       </Button>
+
                     </form>
                   </Form>
                 </Card>
               </motion.div>
             )}
 
+            {/* Paso 5: Resumen */}
+            {/* Paso 5: Resumen */}
+{step === 5 && selectedRoom && date && slot && (
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3 }}
+    className="max-w-2xl mx-auto text-center"
+  >
+    <div className="flex flex-col items-center mb-6">
+      <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 text-blue-600 mb-3">
+        <FileText className="w-10 h-10" />
+      </div>
+      <h2 className="text-2xl font-semibold text-blue-600">
+        Revisa tu reserva
+      </h2>
+      <p className="text-sm text-muted-foreground mt-1">
+        Comprueba que todos los datos son correctos antes de confirmar.
+      </p>
+    </div>
+
+    <Card className="border border-border/40 shadow-sm bg-card/70 backdrop-blur-sm rounded-2xl text-left">
+      <CardContent className="p-6 space-y-3 text-sm">
+        <div className="grid sm:grid-cols-2 gap-y-3 gap-x-6">
+          <p className="flex items-center gap-2">
+            <DoorOpen className="w-4 h-4 text-muted-foreground" />
+            <strong>Sala:</strong>{" "}
+            <span className="text-muted-foreground">{selectedRoom.name}</span>
+          </p>
+
+          <p className="flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-muted-foreground" />
+            <strong>Fecha:</strong>{" "}
+            <span className="text-muted-foreground">
+              {date.toLocaleDateString("es-ES")}
+            </span>
+          </p>
+
+          <p className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <strong>Hora:</strong>{" "}
+            <span className="text-muted-foreground">{slot}</span>
+          </p>
+
+          <p className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-muted-foreground" />
+            <strong>Jugadores:</strong>{" "}
+            <span className="text-muted-foreground">{players}</span>
+          </p>
+
+          {/* 🔹 Precio total */}
+          <p className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-muted-foreground" />
+            <strong>Precio total:</strong>{" "}
+            <span className="text-muted-foreground">
+              {(
+                selectedRoom.priceTable.find((p) => p.players === players)?.price ?? 0
+              ).toFixed(2)}{" "}
+              €
+            </span>
+          </p>
+
+          <p className="flex items-center gap-2">
+            <User className="w-4 h-4 text-muted-foreground" />
+            <strong>Nombre:</strong>{" "}
+            <span className="text-muted-foreground">
+              {form.getValues("firstName")} {form.getValues("lastName")}
+            </span>
+          </p>
+
+          <p className="flex items-center gap-2">
+            <Mail className="w-4 h-4 text-muted-foreground" />
+            <strong>Email:</strong>{" "}
+            <span className="text-muted-foreground">
+              {form.getValues("email")}
+            </span>
+          </p>
+
+          <p className="flex items-center gap-2">
+            <Phone className="w-4 h-4 text-muted-foreground" />
+            <strong>Teléfono:</strong>{" "}
+            <span className="text-muted-foreground">
+              {form.getValues("phone")}
+            </span>
+          </p>
+
+          {form.getValues("notes") && (
+            <p className="sm:col-span-2 flex items-start gap-2">
+              <MessageSquare className="w-4 h-4 text-muted-foreground mt-1" />
+              <span>
+                <strong>Notas:</strong>{" "}
+                <span className="text-muted-foreground">
+                  {form.getValues("notes")}
+                </span>
+              </span>
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+
+    <div className="flex justify-center gap-4 mt-8">
+      <Button
+        variant="secondary"
+        onClick={() => goToStep(4)}
+        className="flex items-center gap-2"
+      >
+        <RotateCcw className="w-4 h-4" />
+        Volver
+      </Button>
+
+      <Button
+        onClick={() => onSubmit(form.getValues())}
+        className="flex items-center gap-2"
+      >
+        <CheckCircle2 className="w-4 h-4" />
+        Confirmar reserva
+      </Button>
+    </div>
+  </motion.div>
+)}
+
+
+
 
             {/* Paso 5: Confirmación */}
-            {step === 5 && confirmedReservation && (
+            {step === 6 && confirmedReservation && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.97 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -902,10 +1030,10 @@ export default function BookingWizard({
 
 
 
-                  <Button variant="outline" className="flex items-center gap-2">
+                  {/* <Button variant="outline" className="flex items-center gap-2">
                     <FileDown className="w-4 h-4" />
                     Descargar PDF
-                  </Button>
+                  </Button> */}
 
                   <Button
                     variant="secondary"
