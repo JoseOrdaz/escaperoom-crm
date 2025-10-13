@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Clock, CheckCircle, XCircle } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 import {
   Plus,
@@ -91,6 +91,8 @@ export function ReservationsCalendar({
   const [view, setView] = useState<"month" | "week">("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [events, setEvents] = useState<Resv[]>(initialReservations);
+  const [loading, setLoading] = useState(false);
+
 
   /* Salas */
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -125,6 +127,8 @@ export function ReservationsCalendar({
 
   /* Carga reservas */
   async function loadRange(from: Date, to: Date) {
+    setLoading(true);
+    try {
     const p = new URLSearchParams({
       from: from.toISOString().slice(0, 10),
       to: to.toISOString().slice(0, 10),
@@ -132,6 +136,9 @@ export function ReservationsCalendar({
     const res = await fetch(`/api/reservations?${p}`, { cache: "no-store" });
     if (!res.ok) throw new Error(await res.text());
     setEvents(await res.json());
+    } finally {
+    setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -433,7 +440,15 @@ export function ReservationsCalendar({
   return (
     <div className="space-y-4">
       {header()}
-      {view === "month" ? <MonthView /> : <WeekView />}
+      {loading ? (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : view === "month" ? (
+        <MonthView />
+      ) : (
+        <WeekView />
+      )}
 
       <ReservationModal
         open={modalOpen}

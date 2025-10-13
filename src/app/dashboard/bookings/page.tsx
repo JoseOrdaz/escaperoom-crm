@@ -13,7 +13,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 
 import ReservationModal, {
   ReservationForEdit,
@@ -57,6 +57,9 @@ type Filters = {
 };
 
 export default function ReservationsTable() {
+
+  const [loading, setLoading] = useState(false);
+
   
   /* ───────── Salas ───────── */
   type Room = {
@@ -115,6 +118,7 @@ export default function ReservationsTable() {
   const pageSize = 50;
 
   async function fetchData(p = 1) {
+     setLoading(true);
     try {
       const qs = new URLSearchParams();
       qs.set("from", filters.from || today);
@@ -136,6 +140,8 @@ export default function ReservationsTable() {
       setPage(p);
     } catch (e) {
       toast.error("Error cargando reservas", { description: String(e) });
+    }  finally {
+    setLoading(false);
     }
   }
 
@@ -283,12 +289,20 @@ export default function ReservationsTable() {
                 </Button>
               )}
           </div>
+          
 
 
           <Separator />
 
           {/* Tabla */}
           <div className="rounded-md border overflow-x-auto">
+
+             {loading ? (
+  <div className="flex justify-center items-center py-12">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+) : (
+  <div className="rounded-md border overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
@@ -390,6 +404,8 @@ export default function ReservationsTable() {
                 )}
               </tbody>
             </table>
+          </div>
+          )}
           </div>
         </CardContent>
       </Card>
