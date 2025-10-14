@@ -9,8 +9,14 @@ import nodemailer from "nodemailer";
 const HHMM = /^\d{2}:\d{2}$/;
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
-const toDateAtLocal = (ymd: string, hhmm = "00:00") =>
-  new Date(`${ymd}T${hhmm}:00`);
+const toDateAtLocal = (ymd: string, hhmm = "00:00") => {
+  const [year, month, day] = ymd.split("-").map(Number);
+  const [hours, minutes] = hhmm.split(":").map(Number);
+
+  // Crea la fecha directamente en UTC (sin aplicar offset local)
+  return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0));
+};
+
 const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
 
 function safeObjectId(id?: string) {

@@ -165,25 +165,28 @@ export default function BookingWizard({
 
   /* ───────── Transformar reservas ───────── */
   const reservationsByDay = useMemo(() => {
-    const map: Record<string, { start: string; end: string }[]> = {};
-    reservations.forEach((res) => {
-      const d = new Date(res.start);
-      const day = d.toLocaleDateString("sv-SE");
-      const start = new Date(res.start).toLocaleTimeString("es-ES", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-      const end = new Date(res.end).toLocaleTimeString("es-ES", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-      if (!map[day]) map[day] = [];
-      map[day].push({ start, end });
-    });
-    return map;
-  }, [reservations]);
+  const map: Record<string, { start: string; end: string }[]> = {};
+  reservations.forEach((res) => {
+    const d = new Date(res.start);
+    const day = d.toISOString().slice(0, 10); // YYYY-MM-DD en UTC
+
+    const startDate = new Date(res.start);
+    const endDate = new Date(res.end);
+
+    // 🔹 Horas en UTC, no locales
+    const start = `${String(startDate.getUTCHours()).padStart(2, "0")}:${String(
+      startDate.getUTCMinutes()
+    ).padStart(2, "0")}`;
+    const end = `${String(endDate.getUTCHours()).padStart(2, "0")}:${String(
+      endDate.getUTCMinutes()
+    ).padStart(2, "0")}`;
+
+    if (!map[day]) map[day] = [];
+    map[day].push({ start, end });
+  });
+  return map;
+}, [reservations]);
+
 
   const selectedRoom = rooms.find((r) => r._id === roomId);
 
@@ -215,7 +218,10 @@ export default function BookingWizard({
 
       const start = slot;
       const localYMD = date.toLocaleDateString("sv-SE");
-      const startDate = new Date(`${localYMD}T${start}`);
+      const [h, m] = start.split(":").map(Number);
+      const startDate = new Date(date);
+      startDate.setHours(h, m, 0, 0);
+
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + (selectedRoom?.durationMinutes ?? 120));
       const end = endDate.toTimeString().slice(0, 5);

@@ -60,7 +60,7 @@ export default function ReservationsTable() {
 
   const [loading, setLoading] = useState(false);
 
-  
+
   /* ───────── Salas ───────── */
   type Room = {
     _id: string;
@@ -118,7 +118,7 @@ export default function ReservationsTable() {
   const pageSize = 50;
 
   async function fetchData(p = 1) {
-     setLoading(true);
+    setLoading(true);
     try {
       const qs = new URLSearchParams();
       qs.set("from", filters.from || today);
@@ -140,8 +140,8 @@ export default function ReservationsTable() {
       setPage(p);
     } catch (e) {
       toast.error("Error cargando reservas", { description: String(e) });
-    }  finally {
-    setLoading(false);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -188,29 +188,29 @@ export default function ReservationsTable() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-6">
-  <div>
-    <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-      Gestión de reservas
-    </h1>
-    <p className="text-sm text-muted-foreground">
-      Crea, edita o cancela reservas de forma rápida y centralizada
-    </p>
-  </div>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+            Gestión de reservas
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Crea, edita o cancela reservas de forma rápida y centralizada
+          </p>
+        </div>
 
-  <Button
-    onClick={() => {
-      setMode("create");
-      setEditing(null);
-      setPrefill(undefined);
-      setModalOpen(true);
-    }}
-    className="shadow-sm hover:shadow-md transition-all"
-  >
-    <Plus className="mr-2 h-4 w-4" /> Añadir reserva
-  </Button>
-</div>
+        <Button
+          onClick={() => {
+            setMode("create");
+            setEditing(null);
+            setPrefill(undefined);
+            setModalOpen(true);
+          }}
+          className="shadow-sm hover:shadow-md transition-all"
+        >
+          <Plus className="mr-2 h-4 w-4" /> Añadir reserva
+        </Button>
+      </div>
 
-    
+
       <Card>
         <CardHeader>
           <CardTitle>Listado de Reservas</CardTitle>
@@ -289,7 +289,7 @@ export default function ReservationsTable() {
                 </Button>
               )}
           </div>
-          
+
 
 
           <Separator />
@@ -297,115 +297,109 @@ export default function ReservationsTable() {
           {/* Tabla */}
           <div className="rounded-md border overflow-x-auto">
 
-             {loading ? (
-  <div className="flex justify-center items-center py-12">
-    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-  </div>
-) : (
-  <div className="rounded-md border overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="p-2 text-left">Fecha</th>
-                  <th className="p-2 text-left">Hora</th>
-                  <th className="p-2 text-left">Sala</th>
-                  <th className="p-2 text-left">Jugadores</th>
-                  <th className="p-2 text-left">Precio</th>
-                  <th className="p-2 text-left">Idioma</th>
-                  <th className="p-2 text-left">Cliente</th>
-                  <th className="p-2 text-left">Estado</th>
-                  <th className="p-2 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const d = new Date(r.start);
-                  const dateStr = d.toLocaleDateString("es-ES", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "2-digit",
-                  });
-                  const s = d.toLocaleTimeString("es-ES", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-                  const e = new Date(r.end).toLocaleTimeString("es-ES", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-
-                  // filtro cliente/email
-                  if (
-                    filters.q &&
-                    !(
-                      (r.customer?.name ?? "")
-                        .toLowerCase()
-                        .includes(filters.q.toLowerCase()) ||
-                      (r.customer?.email ?? "")
-                        .toLowerCase()
-                        .includes(filters.q.toLowerCase())
-                    )
-                  )
-                    return null;
-
-                  return (
-                    <tr key={r._id} className="border-t">
-                      <td className="p-2">{dateStr}</td>
-                      <td className="p-2">
-                        {s}–{e}
-                      </td>
-                      <td className="p-2">{r.roomName}</td>
-                      <td className="p-2">{r.players}</td>
-                      <td className="p-2">{eur(r.price ?? 0)}</td>
-                      <td className="p-2 uppercase">{r.language}</td>
-                      <td className="p-2">
-                        {r.customer?.name ?? ""}{" "}
-                        {r.customer?.email ? `· ${r.customer.email}` : ""}
-                      </td>
-                      <td className="p-2">
-                        {r.status === "pendiente" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-medium">
-                            <Clock className="w-3 h-3 text-yellow-600" /> Pendiente
-                          </span>
-                        )}
-                        {r.status === "confirmada" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-medium">
-                            <CheckCircle className="w-3 h-3 text-green-600" /> Confirmada
-                          </span>
-                        )}
-                        {r.status === "cancelada" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-800 text-xs font-medium">
-                            <XCircle className="w-3 h-3 text-red-600" /> Cancelada
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="p-2 text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openEdit(r)}
-                        >
-                          Editar
-                        </Button>
-                      </td>
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="rounded-md border overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="p-2 text-left">Fecha</th>
+                      <th className="p-2 text-left">Hora</th>
+                      <th className="p-2 text-left">Sala</th>
+                      <th className="p-2 text-left">Jugadores</th>
+                      <th className="p-2 text-left">Precio</th>
+                      <th className="p-2 text-left">Idioma</th>
+                      <th className="p-2 text-left">Cliente</th>
+                      <th className="p-2 text-left">Estado</th>
+                      <th className="p-2 text-right">Acciones</th>
                     </tr>
-                  );
-                })}
-                {rows.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="text-center py-4 text-muted-foreground"
-                    >
-                      No hay reservas en este rango.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const d = new Date(r.start);
+                      const dateStr = d.toLocaleDateString("es-ES", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit",
+                      });
+                      const s = new Date(r.start).toISOString().substring(11, 16);
+                      const e = new Date(r.end).toISOString().substring(11, 16);
+
+                      // filtro cliente/email
+                      if (
+                        filters.q &&
+                        !(
+                          (r.customer?.name ?? "")
+                            .toLowerCase()
+                            .includes(filters.q.toLowerCase()) ||
+                          (r.customer?.email ?? "")
+                            .toLowerCase()
+                            .includes(filters.q.toLowerCase())
+                        )
+                      )
+                        return null;
+
+                      return (
+                        <tr key={r._id} className="border-t">
+                          <td className="p-2">{dateStr}</td>
+                          <td className="p-2">
+                            {s}–{e}
+                          </td>
+                          <td className="p-2">{r.roomName}</td>
+                          <td className="p-2">{r.players}</td>
+                          <td className="p-2">{eur(r.price ?? 0)}</td>
+                          <td className="p-2 uppercase">{r.language}</td>
+                          <td className="p-2">
+                            {r.customer?.name ?? ""}{" "}
+                            {r.customer?.email ? `· ${r.customer.email}` : ""}
+                          </td>
+                          <td className="p-2">
+                            {r.status === "pendiente" && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-medium">
+                                <Clock className="w-3 h-3 text-yellow-600" /> Pendiente
+                              </span>
+                            )}
+                            {r.status === "confirmada" && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-medium">
+                                <CheckCircle className="w-3 h-3 text-green-600" /> Confirmada
+                              </span>
+                            )}
+                            {r.status === "cancelada" && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-800 text-xs font-medium">
+                                <XCircle className="w-3 h-3 text-red-600" /> Cancelada
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="p-2 text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEdit(r)}
+                            >
+                              Editar
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {rows.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="text-center py-4 text-muted-foreground"
+                        >
+                          No hay reservas en este rango.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -66,7 +66,7 @@ const HHMM = /^\d{2}:\d{2}$/;
 const pad = (n: number) => String(n).padStart(2, "0");
 const hhmmFromISO = (iso: string) => {
   const d = new Date(iso);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 };
 const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) => {
   const toMin = (s: string) => {

@@ -13,8 +13,14 @@ function safeObjectId(id?: string) {
   return /^[a-f0-9]{24}$/i.test(id) ? new ObjectId(id) : null;
 }
 
-const toDateAtLocal = (ymd: string, hhmm = "00:00") =>
-  new Date(`${ymd}T${hhmm}:00`);
+const toDateAtLocal = (ymd: string, hhmm = "00:00") => {
+  const [year, month, day] = ymd.split("-").map(Number);
+  const [hours, minutes] = hhmm.split(":").map(Number);
+
+  // crea fecha directamente en UTC para evitar desplazamiento
+  return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0, 0));
+};
+
 
 const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
 

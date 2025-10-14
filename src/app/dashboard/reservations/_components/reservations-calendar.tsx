@@ -78,6 +78,15 @@ function getMonthMatrix(cursor: Date) {
   return weeks;
 }
 
+// ✅ Helper para mostrar la hora literal sin aplicar zona horaria
+function formatTimeLiteral(isoString: string) {
+  // Evita crear Date, usamos el texto original
+  if (!isoString.includes("T")) return isoString;
+  const time = isoString.split("T")[1]?.slice(0, 5); // "HH:MM"
+  return time || "";
+}
+
+
 /* ───────── Componente ───────── */
 export function ReservationsCalendar({
   initialFromISO,
@@ -331,11 +340,8 @@ export function ReservationsCalendar({
                     className="truncate text-xs cursor-pointer hover:underline"
                     onClick={() => openEdit(ev)}
                   >
-                    {new Date(ev.start).toLocaleTimeString("es-ES", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}{" "}
-                    · {ev.roomName}
+                    {formatTimeLiteral(ev.start)} · {ev.roomName}
+
                   </div>
                 ))}
               </CardContent>
@@ -375,14 +381,8 @@ export function ReservationsCalendar({
                   </div>
                 ) : (
                   dayEvents.map((ev) => {
-                    const s = new Date(ev.start).toLocaleTimeString("es-ES", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    });
-                    const e = new Date(ev.end).toLocaleTimeString("es-ES", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    });
+                    const s = formatTimeLiteral(ev.start);
+                    const e = formatTimeLiteral(ev.end);
                     return (
                       <div
                         key={ev._id}
