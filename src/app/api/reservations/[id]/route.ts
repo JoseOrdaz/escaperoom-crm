@@ -176,8 +176,7 @@ export async function PATCH(req: NextRequest, context: any) {
       );
     }
 
-    /* ─────────────── Envío opcional de correo ─────────────── */
-if (
+    if (
   body.sendEmail &&
   (body.status === "pendiente" || body.status === "cancelada")
 ) {
@@ -206,6 +205,7 @@ if (
           pass: "JbLtCYxUfHn4awkh",
         },
       });
+
 
     function normalizeText(text: string) {
       return text
@@ -403,7 +403,7 @@ const actionCancelHTML = `
       }
     }
 
-
+  }
     return NextResponse.json({ ok: true, _id: id });
   } catch (err: unknown) {
     return NextResponse.json(
