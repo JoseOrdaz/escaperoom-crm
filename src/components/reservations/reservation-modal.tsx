@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { Clock, CheckCircle, XCircle } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 
 /* ============ Tipos ============ */
@@ -152,6 +152,9 @@ export default function ReservationModal({
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [slotOptions, setSlotOptions] = useState<Array<TimeSlot & { reserved?: boolean }>>([]);
+  const [sendEmail, setSendEmail] = useState(false);
+  const [loading, setLoading] = useState(false);
+
 
 
 
@@ -297,38 +300,40 @@ export default function ReservationModal({
 
   /* === SUBMIT === */
   async function submit(values: FormValues) {
-    if (!selectedRoom || !selectedDate || !selectedSlot)
-      return toast.error("Selecciona fecha y hora");
+  if (!selectedRoom || !selectedDate || !selectedSlot)
+    return toast.error("Selecciona fecha y hora");
 
-    const [start, end] = selectedSlot.split("-");
-    const body: Record<string, any> = {
-      roomId: selectedRoom._id,
-      date: selectedDate.toLocaleDateString("sv-SE"),
-      start,
-      end,
-      players: values.players,
-      language: values.language,
-      // description: values.description,
-      notes: values.notes,
-      internalNotes: values.internalNotes,
-      status: values.status,
-    };
+  setLoading(true); // 👈 activar loading
 
-    if (values.customerSelectId === "__new__") {
-      body.customerName = `${values.firstName ?? ""} ${values.lastName ?? ""}`.trim();
-      body.customerEmail = values.email;
-      body.customerPhone = values.phone;
-    } else if (values.customerSelectId) {
-      const c = customers.find(
-        (x) =>
-          x._id === values.customerSelectId || x.email === values.customerSelectId
-      );
-      if (c) body.customerId = c._id;
-    }
+  const [start, end] = selectedSlot.split("-");
+  const body: Record<string, any> = {
+    roomId: selectedRoom._id,
+    date: selectedDate.toLocaleDateString("sv-SE"),
+    start,
+    end,
+    players: values.players,
+    language: values.language,
+    notes: values.notes,
+    internalNotes: values.internalNotes,
+    status: values.status,
+    sendEmail,
+  };
 
+  if (values.customerSelectId === "__new__") {
+    body.customerName = `${values.firstName ?? ""} ${values.lastName ?? ""}`.trim();
+    body.customerEmail = values.email;
+    body.customerPhone = values.phone;
+  } else if (values.customerSelectId) {
+    const c = customers.find(
+      (x) => x._id === values.customerSelectId || x.email === values.customerSelectId
+    );
+    if (c) body.customerId = c._id;
+  }
+
+  try {
     const res = await fetch(
       mode === "edit"
-        ? `/api/reservations/${reservation?._id}` 
+        ? `/api/reservations/${reservation?._id}`
         : "/api/reservations",
       {
         method: mode === "edit" ? "PUT" : "POST",
@@ -342,10 +347,20 @@ export default function ReservationModal({
       return toast.error("Error al guardar reserva", {
         description: json?.error,
       });
+
     toast.success("Reserva guardada correctamente");
     onOpenChange(false);
     onSaved?.(json._id ?? "");
+  } catch (err: any) {
+    toast.error("Error al guardar reserva", {
+      description: err?.message,
+    });
+  } finally {
+    setLoading(false); // 👈 desactivar loading siempre
+    setSendEmail(false);
   }
+}
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -579,7 +594,7 @@ export default function ReservationModal({
                           <FormItem>
                             <FormLabel>Teléfono *</FormLabel>
                             <FormControl>
-                              <Input type="tel" placeholder="+34..." {...field} />
+                              <Input type="tel" placeholder="600..." {...field} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -637,52 +652,74 @@ export default function ReservationModal({
                     </FormItem>
                   )}
                 />
-<FormField
-  control={form.control}
-  name="status"
-  render={({ field }) => (
-    <FormItem>
-      <FormLabel>Estado de la reserva</FormLabel>
-       <FormDescription>Selecciona el estado actual de la reserva</FormDescription>
-      <Select
-        value={field.value}
-        onValueChange={field.onChange}
-      >
-        <FormControl>
-          <SelectTrigger
-            className={cn(
-              field.value === "pendiente" && "border-yellow-300 text-yellow-700",
-              field.value === "confirmada" && "border-green-300 text-green-700",
-              field.value === "cancelada" && "border-red-300 text-red-700"
-            )}
-          >
-            <SelectValue placeholder="Selecciona estado" />
-          </SelectTrigger>
-        </FormControl>
-        <SelectContent>
-          <SelectItem value="pendiente">
-            <div className="flex items-center gap-2 text-yellow-700">
-              <Clock className="w-4 h-4 text-yellow-600" />
-              <span>Pendiente</span>
-            </div>
-          </SelectItem>
-          <SelectItem value="confirmada">
-            <div className="flex items-center gap-2 text-green-700">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              <span>Confirmada</span>
-            </div>
-          </SelectItem>
-          <SelectItem value="cancelada">
-            <div className="flex items-center gap-2 text-red-700">
-              <XCircle className="w-4 h-4 text-red-600" />
-              <span>Cancelada</span>
-            </div>
-          </SelectItem>
-        </SelectContent>
-      </Select>
-    </FormItem>
-  )}
-/>
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estado de la reserva</FormLabel>
+                      <FormDescription>Selecciona el estado actual de la reserva</FormDescription>
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            className={cn(
+                              field.value === "pendiente" && "border-yellow-300 text-yellow-700",
+                              field.value === "confirmada" && "border-green-300 text-green-700",
+                              field.value === "cancelada" && "border-red-300 text-red-700"
+                            )}
+                          >
+                            <SelectValue placeholder="Selecciona estado" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="pendiente">
+                            <div className="flex items-center gap-2 text-yellow-700">
+                              <Clock className="w-4 h-4 text-yellow-600" />
+                              <span>Pendiente</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="confirmada">
+                            <div className="flex items-center gap-2 text-green-700">
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                              <span>Confirmada</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="cancelada">
+                            <div className="flex items-center gap-2 text-red-700">
+                              <XCircle className="w-4 h-4 text-red-600" />
+                              <span>Cancelada</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+
+                  
+                />
+
+                {mode === "edit" &&
+                  (form.watch("status") === "pendiente" ||
+                    form.watch("status") === "cancelada") && (
+                    <div className="flex items-center space-x-2 border rounded-md p-3 bg-muted/30">
+                      <input
+                        id="sendEmail"
+                        type="checkbox"
+                        checked={sendEmail}
+                        onChange={(e) => setSendEmail(e.target.checked)}
+                        className="h-4 w-4 accent-primary"
+                      />
+                      <label
+                        htmlFor="sendEmail"
+                        className="text-sm text-muted-foreground cursor-pointer"
+                      >
+                        Enviar correo al cliente informando sobre el estado de la reserva
+                      </label>
+                    </div>
+                  )}
 
                 </>
               )}
@@ -728,9 +765,20 @@ export default function ReservationModal({
             type="submit"
             form="reservation-form"
             className="w-full sm:w-auto"
+            disabled={loading} // 👈 desactiva durante carga
           >
-            {mode === "edit" ? "Guardar cambios" : "Crear reserva"}
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Guardando...
+              </>
+            ) : mode === "edit" ? (
+              "Guardar cambios"
+            ) : (
+              "Crear reserva"
+            )}
           </Button>
+
         </DialogFooter>
       </DialogContent>
     </Dialog>
