@@ -14,8 +14,18 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
 /* ───────── Lógica común ───────── */
 async function cancelReservation(reservationId: string) {
+
+  
   try {
     const db = await connectDB();
+
+    const existing = await db.collection("reservations").findOne({ _id });
+    if (!existing) {
+      return NextResponse.redirect("https://escaperoom-crm.vercel.app/cancelacion-error");
+    }
+    if (existing.status === "cancelada") {
+      return NextResponse.redirect("https://escaperoom-crm.vercel.app/cancelada");
+    }
 
     if (!ObjectId.isValid(reservationId)) {
       return NextResponse.json(
