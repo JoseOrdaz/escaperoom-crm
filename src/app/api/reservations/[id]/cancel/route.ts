@@ -19,14 +19,6 @@ async function cancelReservation(reservationId: string) {
   try {
     const db = await connectDB();
 
-    const existing = await db.collection("reservations").findOne({ _id });
-    if (!existing) {
-      return NextResponse.redirect("https://escaperoom-crm.vercel.app/cancelacion-error");
-    }
-    if (existing.status === "cancelada") {
-      return NextResponse.redirect("https://escaperoom-crm.vercel.app/cancelada");
-    }
-
     if (!ObjectId.isValid(reservationId)) {
       return NextResponse.json(
         { ok: false, error: "ID de reserva inválido" },
@@ -39,6 +31,12 @@ async function cancelReservation(reservationId: string) {
     const reservation = await db.collection("reservations").findOne({ _id });
     if (!reservation) {
       return NextResponse.redirect("https://escaperoom-crm.vercel.app/cancelacion-error");
+    }
+
+    // 🛡️ Protección contra doble ejecución (prefetch o clic repetido)
+    if (reservation.status === "cancelada") {
+      console.log("Reserva ya cancelada, no se reenvía correo.");
+      return NextResponse.redirect("https://escaperoom-crm.vercel.app/cancelada");
     }
 
     await db
