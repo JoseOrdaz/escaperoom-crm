@@ -176,36 +176,25 @@ export async function PATCH(req: NextRequest, context: any) {
       );
     }
 
-    if (
-  body.sendEmail &&
-  (body.status === "pendiente" || body.status === "cancelada")
-) {
-  // Comprobamos el estado actual en base de datos ANTES de enviar correo
-  const prev = await db.collection("reservations").findOne({ _id });
-  const prevStatus = prev?.status ?? null;
+    /* ─────────────── Envío opcional de correo ─────────────── */
+if (body.sendEmail && (body.status === "pendiente" || body.status === "cancelada")) {
+  try {
+    const reservation = await db.collection("reservations").findOne({ _id });
+    const customerId = safeObjectId(reservation?.customerId);
+    const customer = customerId
+      ? await db.collection("customers").findOne({ _id: customerId })
+      : null;
+    if (!customer?.email) throw new Error("Cliente sin email");
 
-  // Si ya estaba cancelada antes, no reenviar
-  if (prevStatus === "cancelada" && body.status === "cancelada") {
-    console.log("Correo no enviado: ya estaba cancelada anteriormente");
-  } else {
-    try {
-      const reservation = prev;
-      const customerId = safeObjectId(reservation?.customerId);
-      const customer = customerId
-        ? await db.collection("customers").findOne({ _id: customerId })
-        : null;
-      if (!customer?.email) throw new Error("Cliente sin email");
-
-      const transporter = nodemailer.createTransport({
-        host: "smtp-relay.brevo.com",
-        port: 587,
-        secure: false,
-        auth: {
-          user: "joseordazsuay@gmail.com",
-          pass: "JbLtCYxUfHn4awkh",
-        },
-      });
-
+    const transporter = nodemailer.createTransport({
+      host: "smtp-relay.brevo.com",
+      port: 587,
+      secure: false,
+      auth: {
+        user: "joseordazsuay@gmail.com",
+        pass: "JbLtCYxUfHn4awkh",
+      },
+    });
 
     function normalizeText(text: string) {
       return text
@@ -403,7 +392,7 @@ const actionCancelHTML = `
       }
     }
 
-  }
+
     return NextResponse.json({ ok: true, _id: id });
   } catch (err: unknown) {
     return NextResponse.json(

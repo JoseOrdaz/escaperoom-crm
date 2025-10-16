@@ -91,7 +91,7 @@ async function cancelReservation(reservationId: string) {
       const fobiaCancelHTML = `
         <div style="font-family:'Segoe UI',Tahoma,sans-serif;background:#f6f8fa;padding:30px;">
           <div style="max-width:600px;margin:auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)">
-            <div style="background:linear-gradient(135deg,#3f51b5,#1a237e);color:white;padding:24px;">
+            <div style="background:linear-gradient(135deg,#e53935,#b71c1c);color:white;padding:24px;">
               <h1 style="margin:0;font-size:22px;">Reserva cancelada</h1>
             </div>
             <div style="padding:28px;color:#333;">
@@ -114,7 +114,7 @@ async function cancelReservation(reservationId: string) {
       const actionCancelHTML = `
         <div style="font-family:'Segoe UI',Tahoma,sans-serif;background:#f6f8fa;padding:30px;">
           <div style="max-width:600px;margin:auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)">
-            <div style="background:linear-gradient(135deg,#00796b,#004d40);color:white;padding:24px;">
+            <div style="background:linear-gradient(135deg,#e53935,#b71c1c);color:white;padding:24px;">
               <h1 style="margin:0;font-size:22px;">Reserva cancelada</h1>
             </div>
             <div style="padding:28px;color:#333;">
