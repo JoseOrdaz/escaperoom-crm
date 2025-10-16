@@ -373,8 +373,8 @@ const actionCancelHTML = `
       // --- Plantillas de confirmación / modificación existentes ---
       htmlContent = isFobia ? fobiaHTML : actionHTML;
       subject = isFobia
-        ? `🔔 Actualización de tu reserva en Fobia Escape Rooms – ${room.name}`
-        : `🔔 Actualización de tu reserva en Action Gates Skill Room – ${room.name}`;
+        ? `🔐 Tu reserva en Fobia Escape Rooms – ${room.name}`
+        : `🎯 Tu reserva en Action Gates Skill Room – ${room.name}`;
     }
 
     // finalmente, el envío del correo:
