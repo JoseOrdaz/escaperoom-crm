@@ -46,7 +46,7 @@ export default function Home() {
                 variant="default"
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow flex items-center gap-2"
               >
-                <Link target="_blank" href="/bookings/fobia">
+                <Link href="/bookings/fobia">
                   Fobia
                   <ExternalLink className="h-4 w-4 opacity-80 group-hover:opacity-100 transition" />
                 </Link>
@@ -57,7 +57,7 @@ export default function Home() {
                 variant="default"
                 className="bg-purple-600 hover:bg-purple-700 text-white font-medium shadow flex items-center gap-2"
               >
-                <Link target="_blank" href="/bookings/action-gates">
+                <Link href="/bookings/action-gates">
                   Action Gates
                   <ExternalLink className="h-4 w-4 opacity-80 group-hover:opacity-100 transition" />
                 </Link>
@@ -68,7 +68,7 @@ export default function Home() {
                 variant="outline"
                 className="text-slate-700 dark:text-slate-200 font-medium shadow-sm flex items-center gap-2"
               >
-                <Link target="_blank" href="/bookings">
+                <Link href="/bookings">
                   Todas las salas
                   <ExternalLink className="h-4 w-4 opacity-80 group-hover:opacity-100 transition" />
                 </Link>
@@ -77,7 +77,7 @@ export default function Home() {
           </Card>
 
           {/* CARD CRM */}
-          <Link target="_blank" href="/dashboard/rooms" className="group">
+          <Link href="/dashboard/rooms" className="group">
             <Card className="relative overflow-hidden rounded-3xl shadow-lg border-none bg-white/80 dark:bg-slate-800/70 backdrop-blur-xl hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between h-full">
               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 opacity-80 group-hover:opacity-100 transition" />
               <CardHeader className="relative z-10 flex flex-col items-center text-center p-10">
@@ -99,7 +99,7 @@ export default function Home() {
                   variant="default"
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow flex items-center gap-2"
                 >
-                  <Link target="_blank" href="/dashboard/rooms">
+                  <Link href="/dashboard/rooms">
                     Acceso al CRM
                     <LayoutDashboard className="h-4 w-4 opacity-80 group-hover:opacity-100 transition" />
                   </Link>
