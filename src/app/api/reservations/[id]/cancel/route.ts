@@ -8,9 +8,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   return cancelReservation(params.id);
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  return cancelReservation(params.id);
-}
+// export async function POST(req: Request, { params }: { params: { id: string } }) {
+//   return cancelReservation(params.id);
+// }
 
 /* ───────── Lógica común ───────── */
 async function cancelReservation(reservationId: string) {
