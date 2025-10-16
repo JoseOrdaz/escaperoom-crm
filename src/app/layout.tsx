@@ -15,8 +15,30 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Escape CRM",
-  description: "CRM para salas de escape",
+  title: "Escape Room CRM",
+  description: "Gestión de reservas y salas para Escape Rooms",
+  openGraph: {
+    title: "Escape Room CRM",
+    description: "Plataforma moderna de gestión de reservas para Escape Rooms.",
+    url: "https://escaperoom-crm.vercel.app",
+    siteName: "Escape Room CRM",
+    images: [
+      {
+        url: "https://escaperoom-crm.vercel.app/uploads/crm-escape-room.png", 
+        width: 1200,
+        height: 630,
+        alt: "Escape Room CRM - Sistema de reservas",
+      },
+    ],
+    locale: "es_ES",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Escape Room CRM",
+    description: "Plataforma moderna de gestión de reservas para Escape Rooms.",
+    images: ["https://escaperoom-crm.vercel.app/uploads/crm-escape-room.png"],
+  },
 };
 
 export default function RootLayout({

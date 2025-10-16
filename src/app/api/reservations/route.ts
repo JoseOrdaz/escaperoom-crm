@@ -346,8 +346,27 @@ const isFobia =
   const [year, month, day] = v.date.split("-");
   const fechaBonita = `${day}/${month}/${year}`;
 
+  
+
   // Datos comunes
-  const cliente = v.customerName?.split(" ")[0] ?? "jugador/a";
+  let cliente = v.customerName;
+  let customerEmail = v.customerEmail;
+
+  if (v.customerId && !v.customerName) {
+    const cust = await db
+      .collection("customers")
+      .findOne(
+        { _id: safeObjectId(v.customerId) },
+        { projection: { name: 1, email: 1 } }
+      );
+
+    if (cust) {
+      cliente = cust.name;
+      if (!v.customerEmail) customerEmail = cust.email;
+    }
+  }
+  const nombreCliente = cliente?.split(" ")[0] || "jugador/a";
+
   const fechaHora = `${fechaBonita} – ${v.start}${v.end ? " a " + v.end : ""}`;
   const jugadores = `${v.players} jugadores`;
   const precio = (room.priceTable?.find(p => p.players === v.players)?.price ?? 0).toFixed(2);
@@ -359,7 +378,7 @@ const isFobia =
   <div style="font-family:'Segoe UI',Tahoma,sans-serif;background-color:#f6f8fa;padding:30px;">
     <div style="max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)">
       <div style="background:linear-gradient(135deg,#3f51b5,#1a237e);color:white;padding:24px;">
-        <h1 style="margin:0;font-size:22px;">¡Hola, ${cliente}!</h1>
+        <h1 style="margin:0;font-size:22px;">¡Hola, ${nombreCliente}!</h1>
       </div>
 
       <div style="padding:28px;color:#333;">
@@ -401,7 +420,7 @@ const isFobia =
   <div style="font-family:'Segoe UI',Tahoma,sans-serif;background-color:#f6f8fa;padding:30px;">
     <div style="max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)">
       <div style="background:linear-gradient(135deg,#00796b,#00a884);color:white;padding:24px;">
-        <h1 style="margin:0;font-size:22px;">¡Hola, ${cliente}!</h1>
+        <h1 style="margin:0;font-size:22px;">¡Hola, ${nombreCliente}!</h1>
       </div>
 
       <div style="padding:28px;color:#333;">
@@ -448,7 +467,7 @@ const isFobia =
     from: isFobia
       ? '"Fobia Escape Room" <valencia@fobiaescape.com>'
       : '"Action Gates" <valencia@action-gates.com>',
-    to: v.customerEmail,
+    to: customerEmail,
     bcc: "joseordazsuay@gmail.com",
     subject,
     html: htmlContent,

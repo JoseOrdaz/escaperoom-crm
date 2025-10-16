@@ -154,6 +154,8 @@ export default function ReservationModal({
   const [slotOptions, setSlotOptions] = useState<Array<TimeSlot & { reserved?: boolean }>>([]);
   const [sendEmail, setSendEmail] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
 
 
 
@@ -300,6 +302,8 @@ export default function ReservationModal({
 
   /* === SUBMIT === */
   async function submit(values: FormValues) {
+    setFormError(null);
+
   if (!selectedRoom || !selectedDate || !selectedSlot)
     return toast.error("Selecciona fecha y hora");
 
@@ -373,7 +377,14 @@ export default function ReservationModal({
 
         <div className="flex-1 overflow-y-scroll pr-2 space-y-6">
           <Form {...form}>
-            <form id="reservation-form" onSubmit={form.handleSubmit(submit)} className="space-y-6 pb-6">
+            <form
+                id="reservation-form"
+                onSubmit={form.handleSubmit(submit, () => {
+                  // Cuando hay errores de validación
+                  setFormError("⚠️ Revisa todos los campos obligatorios");
+                })}
+                className="space-y-6 pb-6"
+              >
 
               {/* Sala */}
               <FormField
@@ -729,57 +740,63 @@ export default function ReservationModal({
 
         {/* Footer fijo */}
         <DialogFooter className="border-t bg-background p-4 flex sm:justify-between gap-2">
-          {mode === "edit" && reservation?._id && (
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={async () => {
-                const confirmed = window.confirm(
-                  "¿Seguro que deseas eliminar esta reserva?"
-                );
-                if (!confirmed) return;
-                const t = toast.loading("Eliminando reserva...");
-                try {
-                  const res = await fetch(`/api/reservations/${reservation._id}`, {
-                    method: "DELETE",
-                  });
-                  const json = await res.json();
-                  if (!res.ok) throw new Error(json?.error || "Error al eliminar");
-                  toast.success("Reserva eliminada correctamente", { id: t });
-                  onOpenChange(false);
-                  onSaved?.(reservation._id);
-                } catch (e: any) {
-                  toast.error("Error eliminando reserva", {
-                    id: t,
-                    description: e?.message,
-                  });
-                }
-              }}
-            >
-              Eliminar
-            </Button>
-          )}
+  {mode === "edit" && reservation?._id && (
+    <Button
+      type="button"
+      variant="destructive"
+      size="sm"
+      onClick={async () => {
+        const confirmed = window.confirm(
+          "¿Seguro que deseas eliminar esta reserva?"
+        );
+        if (!confirmed) return;
+        const t = toast.loading("Eliminando reserva...");
+        try {
+          const res = await fetch(`/api/reservations/${reservation._id}`, {
+            method: "DELETE",
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json?.error || "Error al eliminar");
+          toast.success("Reserva eliminada correctamente", { id: t });
+          onOpenChange(false);
+          onSaved?.(reservation._id);
+        } catch (e: any) {
+          toast.error("Error eliminando reserva", {
+            id: t,
+            description: e?.message,
+          });
+        }
+      }}
+    >
+      Eliminar
+    </Button>
+  )}
 
-          <Button
-            type="submit"
-            form="reservation-form"
-            className="w-full sm:w-auto"
-            disabled={loading} // 👈 desactiva durante carga
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Guardando...
-              </>
-            ) : mode === "edit" ? (
-              "Guardar cambios"
-            ) : (
-              "Crear reserva"
-            )}
-          </Button>
+  {formError && (
+    <p className="text-sm text-red-600 font-medium flex-1 text-center sm:text-left">
+      {formError}
+    </p>
+  )}
 
-        </DialogFooter>
+  <Button
+    type="submit"
+    form="reservation-form"
+    className="w-full sm:w-auto"
+    disabled={loading}
+  >
+    {loading ? (
+      <>
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        Guardando...
+      </>
+    ) : mode === "edit" ? (
+      "Guardar cambios"
+    ) : (
+      "Crear reserva"
+    )}
+  </Button>
+</DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
