@@ -119,6 +119,7 @@ export async function GET(req: Request) {
     const from = searchParams.get("from") ?? "";
     const to = searchParams.get("to") ?? "";
     const roomId = safeObjectId(searchParams.get("roomId") ?? "");
+    const roomIdsParam = searchParams.get("roomIds");
 
     if (!YMD.test(from) || !YMD.test(to)) {
       return NextResponse.json(
@@ -132,6 +133,27 @@ export async function GET(req: Request) {
     const toD = toDateAtLocal(to, "00:00");
 
     const query: any = { start: { $gte: fromD }, end: { $lt: toD } };
+
+    // 🧠 Filtrado por sala o salas
+    if (roomIdsParam) {
+      // Ejemplo: roomIdsParam = "68e21f7fa4b8222c245033ea,68e19f57c164ecb8af94a90c"
+      const ids = roomIdsParam
+        .split(",")
+        .map((id) => safeObjectId(id))
+        .filter((id): id is ObjectId => id !== null);
+
+      if (ids.length > 0) {
+        query.roomId = { $in: ids };
+      }
+    } else if (roomId) {
+      // Compatibilidad con versión anterior (una sola sala + vinculadas)
+      const room = await db.collection("rooms").findOne({ _id: roomId });
+      const linked = (room?.linkedRooms ?? [])
+        .map((id: string) => safeObjectId(id))
+        .filter(Boolean);
+      query.roomId = { $in: [roomId, ...linked] };
+    }
+
 
     if (roomId) {
       const room = await db.collection("rooms").findOne({ _id: roomId });
@@ -328,53 +350,53 @@ export async function POST(req: Request) {
           pass: "JbLtCYxUfHn4awkh",
         },
       });
-function normalizeText(text: string) {
-  return text
-    .toLowerCase()
-    .normalize("NFD") // separa acentos
-    .replace(/[\u0300-\u036f]/g, ""); // elimina acentos
-}
-  // Detectar si la sala pertenece a Fobia o a Action Gates
-  const roomName = normalizeText(room.name);
+      function normalizeText(text: string) {
+        return text
+          .toLowerCase()
+          .normalize("NFD") // separa acentos
+          .replace(/[\u0300-\u036f]/g, ""); // elimina acentos
+      }
+      // Detectar si la sala pertenece a Fobia o a Action Gates
+      const roomName = normalizeText(room.name);
 
-const isFobia =
-  roomName.includes("piedra filosofal") ||
-  roomName.includes("gulliver y los gigantes") ||
-  roomName.includes("academia de houdini") ||
-  roomName.includes("casa de los fantasmas");
+      const isFobia =
+        roomName.includes("piedra filosofal") ||
+        roomName.includes("gulliver y los gigantes") ||
+        roomName.includes("academia de houdini") ||
+        roomName.includes("casa de los fantasmas");
 
-  const [year, month, day] = v.date.split("-");
-  const fechaBonita = `${day}/${month}/${year}`;
+      const [year, month, day] = v.date.split("-");
+      const fechaBonita = `${day}/${month}/${year}`;
 
-  
 
-  // Datos comunes
-  let cliente = v.customerName;
-  let customerEmail = v.customerEmail;
 
-  if (v.customerId && !v.customerName) {
-    const cust = await db
-      .collection("customers")
-      .findOne(
-        { _id: safeObjectId(v.customerId) },
-        { projection: { name: 1, email: 1 } }
-      );
+      // Datos comunes
+      let cliente = v.customerName;
+      let customerEmail = v.customerEmail;
 
-    if (cust) {
-      cliente = cust.name;
-      if (!v.customerEmail) customerEmail = cust.email;
-    }
-  }
-  const nombreCliente = cliente?.split(" ")[0] || "jugador/a";
+      if (v.customerId && !v.customerName) {
+        const cust = await db
+          .collection("customers")
+          .findOne(
+            { _id: safeObjectId(v.customerId) },
+            { projection: { name: 1, email: 1 } }
+          );
 
-  const fechaHora = `${fechaBonita} – ${v.start}${v.end ? " a " + v.end : ""}`;
-  const jugadores = `${v.players} jugadores`;
-  const precio = (room.priceTable?.find(p => p.players === v.players)?.price ?? 0).toFixed(2);
+        if (cust) {
+          cliente = cust.name;
+          if (!v.customerEmail) customerEmail = cust.email;
+        }
+      }
+      const nombreCliente = cliente?.split(" ")[0] || "jugador/a";
 
-  
+      const fechaHora = `${fechaBonita} – ${v.start}${v.end ? " a " + v.end : ""}`;
+      const jugadores = `${v.players} jugadores`;
+      const precio = (room.priceTable?.find(p => p.players === v.players)?.price ?? 0).toFixed(2);
 
-  // 🧩 Plantillas HTML
-  const fobiaHTML = `
+
+
+      // 🧩 Plantillas HTML
+      const fobiaHTML = `
   <div style="font-family:'Segoe UI',Tahoma,sans-serif;background-color:#f6f8fa;padding:30px;">
     <div style="max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)">
       <div style="background:linear-gradient(135deg,#3f51b5,#1a237e);color:white;padding:24px;">
@@ -416,7 +438,7 @@ const isFobia =
     </div>
   </div>`;
 
-  const actionHTML = `
+      const actionHTML = `
   <div style="font-family:'Segoe UI',Tahoma,sans-serif;background-color:#f6f8fa;padding:30px;">
     <div style="max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)">
       <div style="background:linear-gradient(135deg,#00796b,#00a884);color:white;padding:24px;">
@@ -457,24 +479,24 @@ const isFobia =
     </div>
   </div>`;
 
-  // ✉️ Enviar correo según la sala
-  const htmlContent = isFobia ? fobiaHTML : actionHTML;
-  const subject = isFobia
-    ? `🔐 Tu reserva en Fobia Escape Rooms – ${room.name}`
-    : `🎯 Tu reserva en Action Gates Skill Room – ${room.name}`;
+      // ✉️ Enviar correo según la sala
+      const htmlContent = isFobia ? fobiaHTML : actionHTML;
+      const subject = isFobia
+        ? `🔐 Tu reserva en Fobia Escape Rooms – ${room.name}`
+        : `🎯 Tu reserva en Action Gates Skill Room – ${room.name}`;
 
-  await transporter.sendMail({
-    from: isFobia
-      ? '"Fobia Escape Room" <valencia@fobiaescape.com>'
-      : '"Action Gates" <valencia@action-gates.com>',
-    to: customerEmail,
-    bcc: "joseordazsuay@gmail.com",
-    subject,
-    html: htmlContent,
-  });
-} catch (err) {
-  console.error("Error enviando correo:", err);
-}
+      await transporter.sendMail({
+        from: isFobia
+          ? '"Fobia Escape Room" <valencia@fobiaescape.com>'
+          : '"Action Gates" <valencia@action-gates.com>',
+        to: customerEmail,
+        bcc: "joseordazsuay@gmail.com",
+        subject,
+        html: htmlContent,
+      });
+    } catch (err) {
+      console.error("Error enviando correo:", err);
+    }
 
 
 

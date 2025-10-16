@@ -22,6 +22,8 @@ import ReservationModal, {
 } from "@/components/reservations/reservation-modal";
 
 import { Clock, CheckCircle, XCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+
 
 
 const ALL = "__all__";
@@ -52,7 +54,7 @@ const eur = (n: number) =>
 type Filters = {
   from: string;
   to?: string;
-  roomId?: string;
+  roomIds?: string[];
   q?: string;
 };
 
@@ -107,10 +109,10 @@ export default function ReservationsTable() {
   const [filters, setFilters] = useState<Filters>({
     from: today,
     to: defaultTo,
-    roomId: ALL,
+    roomIds: [],
     q: "",
   });
-
+  
   /* ───────── Datos ───────── */
   const [rows, setRows] = useState<Resv[]>([]);
   const [total, setTotal] = useState(0);
@@ -123,8 +125,8 @@ export default function ReservationsTable() {
       const qs = new URLSearchParams();
       qs.set("from", filters.from || today);
       qs.set("to", filters.to || defaultTo);
-      if (filters.roomId && filters.roomId !== ALL)
-        qs.set("roomId", filters.roomId);
+      if (filters.roomIds && filters.roomIds.length > 0)
+        qs.set("roomIds", filters.roomIds.join(","));
       if (filters.q) qs.set("q", filters.q);
       qs.set("page", String(p));
       qs.set("pageSize", String(pageSize));
@@ -238,22 +240,62 @@ export default function ReservationsTable() {
             />
 
             {/* Sala */}
-            <Select
-              value={filters.roomId ?? ALL}
-              onValueChange={(v) => setFilters((f) => ({ ...f, roomId: v }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sala" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todas las salas</SelectItem>
-                {rooms.map((r) => (
-                  <SelectItem key={r._id} value={r._id}>
-                    {r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Salas (select con checkboxes dentro) */}
+<Select
+  // No usamos "value" porque será multiselección manual
+  onValueChange={() => {}} // necesario por tipado
+>
+  <SelectTrigger>
+    <SelectValue
+      placeholder={
+        filters.roomIds && filters.roomIds.length > 0
+          ? `${filters.roomIds.length} sala${filters.roomIds.length > 1 ? "s" : ""} seleccionada${filters.roomIds.length > 1 ? "s" : ""}`
+          : "Seleccionar salas"
+      }
+    />
+  </SelectTrigger>
+
+  <SelectContent className="max-h-64 overflow-auto p-2">
+    <div className="flex flex-col gap-1">
+      {rooms.map((r) => {
+        const checked = filters.roomIds?.includes(r._id);
+        return (
+          <label
+            key={r._id}
+            className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-muted cursor-pointer"
+          >
+            <Checkbox
+              checked={checked}
+              onCheckedChange={(value) => {
+                setFilters((f) => {
+                  const ids = new Set(f.roomIds);
+                  if (value) ids.add(r._id);
+                  else ids.delete(r._id);
+                  return { ...f, roomIds: Array.from(ids) };
+                });
+              }}
+            />
+            <span className="text-sm">{r.name}</span>
+          </label>
+        );
+      })}
+    </div>
+
+    {filters.roomIds?.length > 0 && (
+      <div className="border-t mt-2 pt-2 flex justify-center">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-red-500 hover:bg-red-50"
+          onClick={() => setFilters((f) => ({ ...f, roomIds: [] }))}
+        >
+          Quitar selección
+        </Button>
+      </div>
+    )}
+  </SelectContent>
+</Select>
+
 
             {/* Buscador */}
             <Input
@@ -267,7 +309,7 @@ export default function ReservationsTable() {
 
             {/* Botón Reset sutil */}
             {(
-              filters.roomId !== ALL ||
+              (filters.roomIds?.length ?? 0) > 0 ||
               filters.q ||
               filters.from !== today ||
               filters.to !== defaultTo
@@ -280,7 +322,7 @@ export default function ReservationsTable() {
                     setFilters({
                       from: today,
                       to: defaultTo,
-                      roomId: ALL,
+                      roomIds: [],
                       q: "",
                     });
                   }}
