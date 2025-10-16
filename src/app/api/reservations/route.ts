@@ -132,7 +132,17 @@ export async function GET(req: Request) {
     const fromD = toDateAtLocal(from, "00:00");
     const toD = toDateAtLocal(to, "00:00");
 
-    const query: any = { start: { $gte: fromD }, end: { $lt: toD } };
+    const forCalendar = searchParams.get("forCalendar") === "1";
+
+    const query: any = {
+      start: { $gte: fromD },
+      end: { $lt: toD },
+    };
+
+    // ⚙️ Si el front indica que es para el calendario, excluimos canceladas
+    if (forCalendar) {
+      query.status = { $ne: "cancelada" };
+    }
 
     // 🧠 Filtrado por sala o salas
     if (roomIdsParam) {
@@ -286,6 +296,7 @@ export async function POST(req: Request) {
       roomId: { $in: [roomId, ...linkedRoomIds] },
       start: { $lt: end },
       end: { $gt: start },
+      status: { $ne: "cancelada" },
     });
     if (conflict)
       return NextResponse.json(

@@ -164,6 +164,34 @@ export async function PATCH(req: NextRequest, context: any) {
       if (cid) update.customerId = cid;
     }
 
+    // ✅ Verificar conflictos solo si se va a activar la reserva
+if (body.status !== "cancelada") {
+  // Buscar salas vinculadas
+  const linkedRoomIds = (room.linkedRooms ?? [])
+    .map((id: string) => safeObjectId(id))
+    .filter(Boolean);
+
+  // Comprobar si hay otra reserva activa que se solape
+  const conflict = await db.collection("reservations").findOne({
+    _id: { $ne: _id }, // excluir la misma
+    roomId: { $in: [roomId, ...linkedRoomIds] },
+    start: { $lt: end },
+    end: { $gt: start },
+    status: { $ne: "cancelada" }, // solo activas
+  });
+
+  if (conflict) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Ya hay una reserva activa (${conflict.status}) en esa franja`,
+      },
+      { status: 409 }
+    );
+  }
+}
+
+
     const res = await db.collection("reservations").updateOne(
       { _id },
       { $set: update }
@@ -406,6 +434,8 @@ const actionCancelHTML = `
    PUT → Alias de PATCH
 ──────────────────────────────── */
 export async function PUT(req: NextRequest, context: any) {
+
+  
   const { id } = await context.params; // 👈 también await
   return PATCH(req, { ...context, params: { id } });
 }

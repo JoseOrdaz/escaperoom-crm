@@ -200,7 +200,7 @@ export default function ReservationModal({
     const toDate = new Date();
     toDate.setDate(toDate.getDate() + 30);
     const to = toDate.toISOString().slice(0, 10);
-    fetch(`/api/reservations?roomId=${watchRoomId}&from=${today}&to=${to}`)
+    fetch(`/api/reservations?roomId=${watchRoomId}&from=${today}&to=${to}&forCalendar=1`)
       .then((r) => r.json())
       .then((json) => setReservations(json.reservas ?? json ?? []))
       .catch(() => setReservations([]));
