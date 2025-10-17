@@ -8,7 +8,9 @@ export default function CanceladaPage() {
         ¡Reserva cancelada correctamente!
       </h1>
       <p className="text-muted-foreground max-w-md">
-        Hemos cancelado tu reserva con éxito. Esperamos verte pronto para otra aventura en nuestros Escape Rooms 🔐
+        Hemos cancelado tu reserva con éxito. Esperamos verte pronto para otra aventura en nuestros Escape Rooms 🔐. 
+        Si tienes alguna pregunta, no dudes en contactarnos.
+        
       </p>
     </div>
   );
