@@ -121,11 +121,45 @@ export async function PATCH(req: NextRequest, context: any) {
       : addMinutes(start, room.durationMinutes ?? 60);
 
     // Calcular precio
-    const priceRow = (room.priceTable ?? []).find(
-      (r: { players: number; price: number }) =>
-        Number(r.players) === Number(body.players)
-    );
-    const price = Number(priceRow?.price ?? 0);
+    // Calcular precio base según número de jugadores
+const priceRow = (room.priceTable ?? []).find(
+  (r: { players: number; price: number }) =>
+    Number(r.players) === Number(body.players)
+);
+let price = Number(priceRow?.price ?? 0);
+
+  // 🧾 Aplicar cupón si lo hay
+  let appliedCoupon: any = null;
+  if (body.couponCode) {
+    const coupon = await db.collection("coupons").findOne({
+      code: body.couponCode.toUpperCase(),
+      startDate: { $lte: new Date() },
+      endDate: { $gte: new Date() },
+      $or: [{ roomId: null }, { roomId }],
+    });
+
+    if (coupon) {
+      // Calcular descuento
+      if (coupon.type === "percent") {
+        price = Math.max(0, price - (price * coupon.value) / 100);
+      } else if (coupon.type === "amount") {
+        price = Math.max(0, price - coupon.value);
+      }
+
+      appliedCoupon = {
+        code: coupon.code,
+        type: coupon.type,
+        value: coupon.value,
+      };
+
+      // Incrementar contador de uso si es necesario
+      await db.collection("coupons").updateOne(
+        { _id: coupon._id },
+        { $inc: { usedCount: 1 } }
+      );
+    }
+  }
+
 
     // Construir update limpio
     const update: any = {
@@ -140,6 +174,8 @@ export async function PATCH(req: NextRequest, context: any) {
       internalNotes: body.internalNotes ?? "",
       updatedAt: new Date(),
       status: body.status ?? "pendiente",
+        ...(appliedCoupon ? { coupon: appliedCoupon } : { coupon: null }), // 👈 nuevo campo
+
     };
 
     // Cliente
@@ -254,7 +290,30 @@ if (body.sendEmail && (body.status === "pendiente" || body.status === "cancelada
     const horaFin = `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
     const fechaHora = `${fechaBonita} – ${horaInicio} a ${horaFin}`;
     const jugadores = `${reservation.players} jugadores`;
-    const precio = (room.priceTable?.find(p => p.players === reservation.players)?.price ?? 0).toFixed(2);
+    
+    // 💸 Precio original y final (si cupón)
+    const originalPrice = Number(priceRow?.price ?? 0);
+    const finalPrice = Number(price ?? 0);
+    let precioHTML = `${finalPrice.toFixed(2)} €`;
+
+    if (v.couponCode && v.discountType && v.discountValue) {
+      const descuento =
+        v.discountType === "percent"
+          ? `-${v.discountValue}%`
+          : `-${v.discountValue.toFixed(2)} €`;
+
+      precioHTML = `
+        <span style="text-decoration:line-through;color:#999;">
+          ${originalPrice.toFixed(2)} €
+        </span>
+        <strong style="color:#388e3c;"> ${finalPrice.toFixed(2)} €</strong><br/>
+        <small style="color:#388e3c;font-size:13px;">
+          Cupón aplicado: <strong>${v.couponCode}</strong> (${descuento})
+        </small>
+      `;
+    }
+
+
 
     // 🧩 Plantillas HTML (idénticas al POST)
     const fobiaHTML = `
@@ -271,7 +330,8 @@ if (body.sendEmail && (body.status === "pendiente" || body.status === "cancelada
           <tr><td><strong>Sala:</strong></td><td>${room.name}</td></tr>
           <tr><td><strong>Nº de jugadores:</strong></td><td>${jugadores}</td></tr>
           <tr><td><strong>Fecha y hora:</strong></td><td>${fechaHora}</td></tr>
-          <tr><td><strong>Precio:</strong></td><td>${precio} €</td></tr>
+          <tr><td><strong>Precio:</strong></td><td>${precioHTML}</td></tr>
+
         </table>
 
         <p>Se os ruega llegar 15 minutos antes de la hora reservada para rellenar documentos necesarios para la realización de la sala y explicaros las normas, evitando perder tiempo de juego.</p>
@@ -315,7 +375,8 @@ if (body.sendEmail && (body.status === "pendiente" || body.status === "cancelada
           <tr><td><strong>Misión:</strong></td><td>${room.name}</td></tr>
           <tr><td><strong>Nº de jugadores:</strong></td><td>${jugadores}</td></tr>
           <tr><td><strong>Fecha y hora:</strong></td><td>${fechaHora}</td></tr>
-          <tr><td><strong>Precio:</strong></td><td>${precio} €</td></tr>
+          <tr><td><strong>Precio:</strong></td><td>${precioHTML}</td></tr>
+
         </table>
 
         <p>Se os ruega llegar 15 minutos antes de la hora reservada para rellenar documentos necesarios, explicaros las normas y evitar perder tiempo de juego.</p>
@@ -358,7 +419,8 @@ if (body.sendEmail && (body.status === "pendiente" || body.status === "cancelada
           <tr><td><strong>Sala:</strong></td><td>${room.name}</td></tr>
           <tr><td><strong>Nº de jugadores:</strong></td><td>${jugadores}</td></tr>
           <tr><td><strong>Fecha y hora:</strong></td><td>${fechaHora}</td></tr>
-          <tr><td><strong>Precio:</strong></td><td>${precio} €</td></tr>
+          <tr><td><strong>Precio:</strong></td><td>${precioHTML}</td></tr>
+
         </table>
         <p>Esperamos verte pronto para vivir otra aventura.</p>
         <p style="margin-top:24px;">📧 valencia@fobiaescape.com · 📞 +34 654 60 89 75</p>
@@ -379,7 +441,8 @@ const actionCancelHTML = `
           <tr><td><strong>Misión:</strong></td><td>${room.name}</td></tr>
           <tr><td><strong>Nº de jugadores:</strong></td><td>${jugadores}</td></tr>
           <tr><td><strong>Fecha y hora:</strong></td><td>${fechaHora}</td></tr>
-          <tr><td><strong>Precio:</strong></td><td>${precio} €</td></tr>
+          <tr><td><strong>Precio:</strong></td><td>${precioHTML}</td></tr>
+
         </table>
         <p>Esperamos verte pronto para otra misión.</p>
         <p style="margin-top:24px;">📧 valencia@action-gates.com · 📞 +34 692 502 258</p>

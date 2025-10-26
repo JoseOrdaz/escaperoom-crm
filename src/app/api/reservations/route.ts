@@ -39,6 +39,10 @@ const postSchema = z.object({
   notes: z.string().max(1000).optional().default(""),
   internalNotes: z.string().max(1000).optional().default(""),
   status: z.enum(["pendiente", "confirmada", "cancelada"]).default("pendiente"),
+
+  couponCode: z.string().optional(),
+  discountType: z.enum(["percent", "amount"]).optional(),
+  discountValue: z.number().optional(),
 });
 
 /* ───────── Caché en memoria (1 min) ───────── */
@@ -188,6 +192,7 @@ export async function GET(req: Request) {
         internalNotes: 1,
         status: 1,
         customerId: 1,
+        coupon: 1,
       })
       .sort({ start: 1 })
       .toArray();
@@ -243,6 +248,13 @@ export async function GET(req: Request) {
         notes: d.notes ?? "",
         internalNotes: d.internalNotes ?? "",
         status: d.status ?? "pendiente",
+        coupon: d.coupon
+          ? {
+            code: d.coupon.code ?? "",
+            type: d.coupon.type ?? "amount",
+            value: Number(d.coupon.value ?? 0),
+          }
+          : null,
         customer: cust
           ? {
             id: String(cust._id),
@@ -307,7 +319,42 @@ export async function POST(req: Request) {
     const priceRow = (room.priceTable ?? []).find(
       (r: any) => Number(r.players) === Number(v.players)
     );
-    const price = Number(priceRow?.price ?? 0);
+    let price = Number(priceRow?.price ?? 0);
+
+    // 💸 Aplicar descuento si hay cupón
+    // 💸 Aplicar descuento si hay cupón válido en BD
+let appliedCoupon: any = null;
+
+if (v.couponCode) {
+  const coupon = await db.collection("coupons").findOne({
+    code: v.couponCode.toUpperCase(),
+    active: true,
+    startDate: { $lte: new Date() },
+    endDate: { $gte: new Date() },
+    $or: [{ roomId: null }, { roomId }],
+  });
+
+  if (coupon) {
+    if (coupon.type === "percent") {
+      price = Math.max(0, price - (price * coupon.value) / 100);
+    } else if (coupon.type === "amount") {
+      price = Math.max(0, price - coupon.value);
+    }
+
+    appliedCoupon = {
+      code: coupon.code,
+      type: coupon.type,
+      value: coupon.value,
+    };
+
+    // incrementar contador de usos
+    await db.collection("coupons").updateOne(
+      { _id: coupon._id },
+      { $inc: { usedCount: 1 } }
+    );
+  }
+}
+
 
     // ---- Cliente ----
     let customerId: ObjectId | null = null;
@@ -344,7 +391,11 @@ export async function POST(req: Request) {
       createdAt: new Date(),
       updatedAt: new Date(),
       status: v.status,
+      // 🧾 Guardar info del cupón
+      ...(appliedCoupon ? { coupon: appliedCoupon } : {}),
+
     };
+
 
     const res = await db.collection("reservations").insertOne(doc);
 
@@ -402,7 +453,30 @@ export async function POST(req: Request) {
 
       const fechaHora = `${fechaBonita} – ${v.start}${v.end ? " a " + v.end : ""}`;
       const jugadores = `${v.players} jugadores`;
-      const precio = (room.priceTable?.find(p => p.players === v.players)?.price ?? 0).toFixed(2);
+      // 💸 Precio original y final (si cupón)
+      const originalPrice = Number(priceRow?.price ?? 0);
+const finalPrice = Number(price ?? 0);
+let precioHTML = `${finalPrice.toFixed(2)} €`;
+
+if (appliedCoupon) {
+  const descuento =
+    appliedCoupon.type === "percent"
+      ? `-${appliedCoupon.value}%`
+      : `-${appliedCoupon.value.toFixed(2)} €`;
+
+  precioHTML = `
+    <span style="text-decoration:line-through;color:#999;">
+      ${originalPrice.toFixed(2)} €
+    </span>
+    <strong style="color:#388e3c;"> ${finalPrice.toFixed(2)} €</strong><br/>
+    <small style="color:#388e3c;font-size:13px;">
+      Cupón aplicado: <strong>${appliedCoupon.code}</strong> (${descuento})
+    </small>
+  `;
+}
+
+
+
 
 
 
@@ -421,7 +495,7 @@ export async function POST(req: Request) {
           <tr><td><strong>Sala:</strong></td><td>${room.name}</td></tr>
           <tr><td><strong>Nº de jugadores:</strong></td><td>${jugadores}</td></tr>
           <tr><td><strong>Fecha y hora:</strong></td><td>${fechaHora}</td></tr>
-          <tr><td><strong>Precio:</strong></td><td>${precio} €</td></tr>
+          <tr><td><strong>Precio:</strong></td><td>${precioHTML}</td></tr>
         </table>
 
         <p>Se os ruega llegar 15 minutos antes de la hora reservada para rellenar documentos necesarios para la realización de la sala y explicaros las normas, evitando perder tiempo de juego.</p>
@@ -463,7 +537,7 @@ export async function POST(req: Request) {
           <tr><td><strong>Misión:</strong></td><td>${room.name}</td></tr>
           <tr><td><strong>Nº de jugadores:</strong></td><td>${jugadores}</td></tr>
           <tr><td><strong>Fecha y hora:</strong></td><td>${fechaHora}</td></tr>
-          <tr><td><strong>Precio:</strong></td><td>${precio} €</td></tr>
+          <tr><td><strong>Precio:</strong></td><td>${precioHTML}</td></tr>
         </table>
 
         <p>Se os ruega llegar 15 minutos antes de la hora reservada para rellenar documentos necesarios, explicaros las normas y evitar perder tiempo de juego.</p>

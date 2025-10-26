@@ -69,6 +69,10 @@ export default function BookingWizard({
   const [slot, setSlot] = useState<string | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<any | null>(null);
+  const [finalPrice, setFinalPrice] = useState<number | null>(null);
+
 
   /* ───────── Helpers ───────── */
   function getSlotsForDate(room: Room, date: Date) {
@@ -126,6 +130,56 @@ export default function BookingWizard({
     form.reset();
   };
 
+  async function validateCoupon() {
+    if (!couponCode.trim()) {
+      toast.error("Introduce un código de cupón");
+      return;
+    }
+    if (!selectedRoom) {
+      toast.error("Selecciona una sala primero");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          roomId: selectedRoom._id,
+          date: new Date().toISOString(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.valid) throw new Error(data.message || "Cupón no válido");
+
+      // Calcular nuevo precio
+      const basePrice =
+        selectedRoom.priceTable.find((p) => p.players === players)?.price ?? 0;
+      const discount =
+        data.type === "percent"
+          ? (basePrice * data.value) / 100
+          : Number(data.value);
+      const newPrice = Math.max(basePrice - discount, 0);
+
+      setCoupon({
+        code: couponCode.trim(),
+        type: data.type,
+        value: data.value,
+      });
+      setFinalPrice(newPrice);
+
+      toast.success(data.message);
+    } catch (e: any) {
+      setCoupon(null);
+      setFinalPrice(null);
+      toast.error("Cupón no válido", { description: e.message });
+    }
+  }
+
+
+
   /* ───────── Cargar salas (solo si no vienen por props) ───────── */
   useEffect(() => {
     if (roomsProp && roomsProp.length > 0) {
@@ -165,27 +219,27 @@ export default function BookingWizard({
 
   /* ───────── Transformar reservas ───────── */
   const reservationsByDay = useMemo(() => {
-  const map: Record<string, { start: string; end: string }[]> = {};
-  reservations.forEach((res) => {
-    const d = new Date(res.start);
-    const day = d.toISOString().slice(0, 10); // YYYY-MM-DD en UTC
+    const map: Record<string, { start: string; end: string }[]> = {};
+    reservations.forEach((res) => {
+      const d = new Date(res.start);
+      const day = d.toISOString().slice(0, 10); // YYYY-MM-DD en UTC
 
-    const startDate = new Date(res.start);
-    const endDate = new Date(res.end);
+      const startDate = new Date(res.start);
+      const endDate = new Date(res.end);
 
-    // 🔹 Horas en UTC, no locales
-    const start = `${String(startDate.getUTCHours()).padStart(2, "0")}:${String(
-      startDate.getUTCMinutes()
-    ).padStart(2, "0")}`;
-    const end = `${String(endDate.getUTCHours()).padStart(2, "0")}:${String(
-      endDate.getUTCMinutes()
-    ).padStart(2, "0")}`;
+      // 🔹 Horas en UTC, no locales
+      const start = `${String(startDate.getUTCHours()).padStart(2, "0")}:${String(
+        startDate.getUTCMinutes()
+      ).padStart(2, "0")}`;
+      const end = `${String(endDate.getUTCHours()).padStart(2, "0")}:${String(
+        endDate.getUTCMinutes()
+      ).padStart(2, "0")}`;
 
-    if (!map[day]) map[day] = [];
-    map[day].push({ start, end });
-  });
-  return map;
-}, [reservations]);
+      if (!map[day]) map[day] = [];
+      map[day].push({ start, end });
+    });
+    return map;
+  }, [reservations]);
 
 
   const selectedRoom = rooms.find((r) => r._id === roomId);
@@ -240,6 +294,7 @@ export default function BookingWizard({
           customerName: `${values.firstName} ${values.lastName}`.trim(),
           customerEmail: values.email,
           customerPhone: values.phone,
+          ...(coupon ? { couponCode: coupon.code } : {}),
         }),
       });
 
@@ -259,6 +314,8 @@ export default function BookingWizard({
           phone: values.phone,
         },
         notes: values.notes,
+        coupon: coupon ? { ...coupon } : null,        // 👈 añade esto
+        finalPrice: finalPrice ?? null,
       });
 
       toast.success("¡Reserva confirmada!", {
@@ -719,6 +776,31 @@ export default function BookingWizard({
                           </FormItem>
                         )}
                       />
+                      {/* Campo de cupón */}
+                      <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                        <Input
+                          placeholder="Introduce tu cupón"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value)}
+                          className="sm:w-64"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={validateCoupon}
+                          className="whitespace-nowrap"
+                        >
+                          Aplicar cupón
+                        </Button>
+                      </div>
+
+                      {/* Precio final */}
+                      {finalPrice !== null && (
+                        <p className="mt-2 text-green-600 text-sm font-medium">
+                          Cupón {coupon?.code}: precio final {finalPrice.toFixed(2)} €
+                        </p>
+                      )}
+
 
                       {/* Checkbox privacidad */}
                       <FormField
@@ -751,6 +833,8 @@ export default function BookingWizard({
                         )}
                       />
 
+
+
                       <Button
                         type="button"
                         onClick={async () => {
@@ -769,126 +853,128 @@ export default function BookingWizard({
             )}
 
             {/* Paso 5: Resumen */}
-            {/* Paso 5: Resumen */}
-{step === 5 && selectedRoom && date && slot && (
-  <motion.div
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.3 }}
-    className="max-w-2xl mx-auto text-center"
-  >
-    <div className="flex flex-col items-center mb-6">
-      <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 text-blue-600 mb-3">
-        <FileText className="w-10 h-10" />
-      </div>
-      <h2 className="text-2xl font-semibold text-blue-600">
-        Revisa tu reserva
-      </h2>
-      <p className="text-sm text-muted-foreground mt-1">
-        Comprueba que todos los datos son correctos antes de confirmar.
-      </p>
-    </div>
+            {step === 5 && selectedRoom && date && slot && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="max-w-2xl mx-auto text-center"
+              >
+                <div className="flex flex-col items-center mb-6">
+                  <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 text-blue-600 mb-3">
+                    <FileText className="w-10 h-10" />
+                  </div>
+                  <h2 className="text-2xl font-semibold text-blue-600">
+                    Revisa tu reserva
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Comprueba que todos los datos son correctos antes de confirmar.
+                  </p>
+                </div>
 
-    <Card className="border border-border/40 shadow-sm bg-card/70 backdrop-blur-sm rounded-2xl text-left">
-      <CardContent className="p-6 space-y-3 text-sm">
-        <div className="grid sm:grid-cols-2 gap-y-3 gap-x-6">
-          <p className="flex items-center gap-2">
-            <DoorOpen className="w-4 h-4 text-muted-foreground" />
-            <strong>Sala:</strong>{" "}
-            <span className="text-muted-foreground">{selectedRoom.name}</span>
-          </p>
+                <Card className="border border-border/40 shadow-sm bg-card/70 backdrop-blur-sm rounded-2xl text-left">
+                  <CardContent className="p-6 space-y-3 text-sm">
+                    <div className="grid sm:grid-cols-2 gap-y-3 gap-x-6">
+                      <p className="flex items-center gap-2">
+                        <DoorOpen className="w-4 h-4 text-muted-foreground" />
+                        <strong>Sala:</strong>{" "}
+                        <span className="text-muted-foreground">{selectedRoom.name}</span>
+                      </p>
 
-          <p className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-muted-foreground" />
-            <strong>Fecha:</strong>{" "}
-            <span className="text-muted-foreground">
-              {date.toLocaleDateString("es-ES")}
-            </span>
-          </p>
+                      <p className="flex items-center gap-2">
+                        <CalendarDays className="w-4 h-4 text-muted-foreground" />
+                        <strong>Fecha:</strong>{" "}
+                        <span className="text-muted-foreground">
+                          {date.toLocaleDateString("es-ES")}
+                        </span>
+                      </p>
 
-          <p className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <strong>Hora:</strong>{" "}
-            <span className="text-muted-foreground">{slot}</span>
-          </p>
+                      <p className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-muted-foreground" />
+                        <strong>Hora:</strong>{" "}
+                        <span className="text-muted-foreground">{slot}</span>
+                      </p>
 
-          <p className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-muted-foreground" />
-            <strong>Jugadores:</strong>{" "}
-            <span className="text-muted-foreground">{players}</span>
-          </p>
+                      <p className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-muted-foreground" />
+                        <strong>Jugadores:</strong>{" "}
+                        <span className="text-muted-foreground">{players}</span>
+                      </p>
 
-          {/* 🔹 Precio total */}
-          <p className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-muted-foreground" />
-            <strong>Precio total:</strong>{" "}
-            <span className="text-muted-foreground">
-              {(
-                selectedRoom.priceTable.find((p) => p.players === players)?.price ?? 0
-              ).toFixed(2)}{" "}
-              €
-            </span>
-          </p>
+                      {/* 🔹 Precio total (con descuento si aplica) */}
+                      <p className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-muted-foreground" />
+                        <strong>Precio:</strong>{" "}
+                        <span className="text-muted-foreground">
+                          {finalPrice !== null
+                            ? `${finalPrice.toFixed(2)} € (Cupón aplicado)`
+                            : `${(
+                              selectedRoom.priceTable.find((p) => p.players === players)?.price ?? 0
+                            ).toFixed(2)} €`}
+                        </span>
+                      </p>
 
-          <p className="flex items-center gap-2">
-            <User className="w-4 h-4 text-muted-foreground" />
-            <strong>Nombre:</strong>{" "}
-            <span className="text-muted-foreground">
-              {form.getValues("firstName")} {form.getValues("lastName")}
-            </span>
-          </p>
 
-          <p className="flex items-center gap-2">
-            <Mail className="w-4 h-4 text-muted-foreground" />
-            <strong>Email:</strong>{" "}
-            <span className="text-muted-foreground">
-              {form.getValues("email")}
-            </span>
-          </p>
+                      <p className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        <strong>Nombre:</strong>{" "}
+                        <span className="text-muted-foreground">
+                          {form.getValues("firstName")} {form.getValues("lastName")}
+                        </span>
+                      </p>
 
-          <p className="flex items-center gap-2">
-            <Phone className="w-4 h-4 text-muted-foreground" />
-            <strong>Teléfono:</strong>{" "}
-            <span className="text-muted-foreground">
-              {form.getValues("phone")}
-            </span>
-          </p>
+                      <p className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        <strong>Email:</strong>{" "}
+                        <span className="text-muted-foreground">
+                          {form.getValues("email")}
+                        </span>
+                      </p>
 
-          {form.getValues("notes") && (
-            <p className="sm:col-span-2 flex items-start gap-2">
-              <MessageSquare className="w-4 h-4 text-muted-foreground mt-1" />
-              <span>
-                <strong>Notas:</strong>{" "}
-                <span className="text-muted-foreground">
-                  {form.getValues("notes")}
-                </span>
-              </span>
-            </p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+                      <p className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-muted-foreground" />
+                        <strong>Teléfono:</strong>{" "}
+                        <span className="text-muted-foreground">
+                          {form.getValues("phone")}
+                        </span>
+                      </p>
 
-    <div className="flex justify-center gap-4 mt-8">
-      <Button
-        variant="secondary"
-        onClick={() => goToStep(4)}
-        className="flex items-center gap-2"
-      >
-        <RotateCcw className="w-4 h-4" />
-        Volver
-      </Button>
+                      {form.getValues("notes") && (
+                        <p className="sm:col-span-2 flex items-start gap-2">
+                          <MessageSquare className="w-4 h-4 text-muted-foreground mt-1" />
+                          <span>
+                            <strong>Notas:</strong>{" "}
+                            <span className="text-muted-foreground">
+                              {form.getValues("notes")}
+                            </span>
+                          </span>
+                        </p>
+                      )}
+                    </div>
 
-      <Button
-        onClick={() => onSubmit(form.getValues())}
-        className="flex items-center gap-2"
-      >
-        <CheckCircle2 className="w-4 h-4" />
-        Confirmar reserva
-      </Button>
-    </div>
-  </motion.div>
-)}
+                  </CardContent>
+                </Card>
+
+                <div className="flex justify-center gap-4 mt-8">
+                  <Button
+                    variant="secondary"
+                    onClick={() => goToStep(4)}
+                    className="flex items-center gap-2"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Volver
+                  </Button>
+
+                  <Button
+                    onClick={() => onSubmit(form.getValues())}
+                    className="flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Confirmar reserva
+                  </Button>
+                </div>
+              </motion.div>
+            )}
 
 
 
@@ -953,16 +1039,24 @@ export default function BookingWizard({
                       </p>
                       <p className="flex items-center gap-2">
                         <FileText className="w-4 h-4 text-muted-foreground" />
-                        <strong>Precio total:</strong>{" "}
+                        <strong>Precio:</strong>{" "}
                         <span className="text-muted-foreground">
-                          {(
-                            confirmedReservation.room?.priceTable.find(
-                              (p) => p.players === confirmedReservation.players
-                            )?.price ?? 0
-                          ).toFixed(2)}{" "}
-                          €
+                          {confirmedReservation.finalPrice
+                            ? `${confirmedReservation.finalPrice.toFixed(2)} €`
+                            : `${(
+                              confirmedReservation.room?.priceTable.find(
+                                (p) => p.players === confirmedReservation.players
+                              )?.price ?? 0
+                            ).toFixed(2)} €`}
+                          {confirmedReservation.coupon && (
+                            <span className="text-xs text-green-600 ml-1">
+                              (Cupón {confirmedReservation.coupon.code} aplicado)
+                            </span>
+                          )}
                         </span>
                       </p>
+
+
                       <p className="flex items-center gap-2">
                         <User className="w-4 h-4 text-muted-foreground" />
                         <strong>Cliente:</strong>{" "}

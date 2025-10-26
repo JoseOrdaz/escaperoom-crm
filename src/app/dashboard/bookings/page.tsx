@@ -42,6 +42,7 @@ type Resv = {
   notes?: string;
   internalNotes?: string;
   status?: "pendiente" | "confirmada" | "cancelada";
+  coupon?: { code: string; type: "percent" | "amount"; value: number };
 };
 
 const eur = (n: number) =>
@@ -172,6 +173,7 @@ export default function ReservationsTable() {
       notes: r.notes,
       internalNotes: r.internalNotes,
       status: r.status ?? "pendiente",
+      coupon: r.coupon ?? undefined,
       customer: r.customer
         ? {
           name: r.customer.name,
@@ -353,6 +355,7 @@ export default function ReservationsTable() {
                       <th className="p-2 text-left">Sala</th>
                       <th className="p-2 text-left">Jugadores</th>
                       <th className="p-2 text-left">Precio</th>
+                      <th className="p-2 text-left">Cupón</th>
                       <th className="p-2 text-left">Idioma</th>
                       <th className="p-2 text-left">Cliente</th>
                       <th className="p-2 text-left">Estado</th>
@@ -393,6 +396,21 @@ export default function ReservationsTable() {
                           <td className="p-2">{r.roomName}</td>
                           <td className="p-2">{r.players}</td>
                           <td className="p-2">{eur(r.price ?? 0)}</td>
+                          <td className="p-2">
+                            {r.coupon ? (
+                              <div className="flex flex-col leading-tight">
+                                <span className="font-medium">{r.coupon.code}</span>
+                                <span className="text-muted-foreground text-xs">
+                                  {r.coupon.type === "percent"
+                                    ? `-${r.coupon.value}%`
+                                    : `-${eur(r.coupon.value)}`}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs italic">—</span>
+                            )}
+                          </td>
+
                           <td className="p-2 uppercase">{r.language}</td>
                           <td className="p-2">
                             {r.customer?.name ?? ""}{" "}

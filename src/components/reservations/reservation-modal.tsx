@@ -56,6 +56,8 @@ export type ReservationForEdit = {
   internalNotes?: string;
   status?: "pendiente" | "confirmada" | "cancelada";
   customer?: { id?: string; name?: string; email?: string; phone?: string };
+  coupon?: { code: string; type: "percent" | "amount"; value: number };
+
 };
 
 
@@ -95,8 +97,9 @@ function getSlotsForDate(room: Room, date: Date): TimeSlot[] {
   const key = getDayKeyFromDate(date) as keyof WeekTemplate;
   return normSlots(schedule?.template?.[key]);
 }
-function priceForPlayers(room: Room, players: number) {
-  const row = room.priceTable?.find((p) => Number(p.players) === Number(players));
+function priceForPlayers(room: Room, players?: number) {
+  const target = Number(players ?? 0);
+  const row = room.priceTable?.find((p) => Number(p.players) === target);
   return row ? Number(row.price) : 0;
 }
 const eur = (n: number) =>
@@ -155,6 +158,8 @@ export default function ReservationModal({
   const [sendEmail, setSendEmail] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [selectedCoupon, setSelectedCoupon] = useState<any | null>(null);
 
 
 
@@ -193,6 +198,25 @@ export default function ReservationModal({
       .catch(() => setCustomers([]));
   }, []);
 
+  /* Cargar cupones */
+useEffect(() => {
+  fetch("/api/coupons")
+    .then((r) => r.json())
+    .then((data) => {
+      const now = new Date();
+      const valid = (data.coupons || []).filter((c: any) => {
+        return (
+          c.active &&
+          new Date(c.startDate) <= now &&
+          new Date(c.endDate) >= now
+        );
+      });
+      setCoupons(valid);
+    })
+    .catch(() => setCoupons([]));
+}, []);
+
+
   /* Cargar reservas */
   useEffect(() => {
     if (!watchRoomId) return;
@@ -214,7 +238,23 @@ export default function ReservationModal({
     return;
   }
 
+  
+
   if (mode === "edit" && reservation) {
+
+       if (reservation.coupon) {
+      const existing = coupons.find(
+        (c) => c.code === reservation.coupon?.code
+      );
+      if (existing) {
+        setSelectedCoupon(existing);
+      } else {
+        // Si el cupón ya no está en la lista actual, lo guardamos temporalmente
+        setSelectedCoupon(reservation.coupon);
+      }
+    } else {
+      setSelectedCoupon(null);
+    }
     // Esperar a que los clientes estén cargados antes de resetear
     if (!customers.length) return;
 
@@ -244,7 +284,7 @@ export default function ReservationModal({
     setSelectedDate(null);
     setSelectedSlot(null);
   }
-}, [open, mode, reservation, form, customers]);
+}, [open, mode, reservation, form, customers, coupons]);
 
 
 
@@ -292,13 +332,20 @@ export default function ReservationModal({
     );
   }, [selectedRoom, selectedDate, reservationsByDay]);
 
-  const computedPrice = useMemo(
-    () =>
-      selectedRoom
-        ? priceForPlayers(selectedRoom, Number(watchPlayers) || 0)
-        : 0,
-    [selectedRoom, watchPlayers]
-  );
+  const computedPrice = useMemo(() => {
+  if (!selectedRoom) return 0;
+  const basePrice = priceForPlayers(selectedRoom, Number(watchPlayers) || 0);
+  if (!selectedCoupon) return basePrice;
+
+  // Aplicar descuento
+  const discount =
+    selectedCoupon.type === "percent"
+      ? basePrice * (selectedCoupon.value / 100)
+      : selectedCoupon.value;
+
+  return Math.max(basePrice - discount, 0);
+}, [selectedRoom, watchPlayers, selectedCoupon]);
+
 
   /* === SUBMIT === */
   async function submit(values: FormValues) {
@@ -322,6 +369,28 @@ export default function ReservationModal({
     status: values.status,
     sendEmail,
   };
+
+  if (selectedCoupon) {
+  const basePrice = priceForPlayers(selectedRoom, values.players);
+  const discount =
+    selectedCoupon.type === "percent"
+      ? basePrice * (selectedCoupon.value / 100)
+      : selectedCoupon.value;
+  const finalPrice = Math.max(basePrice - discount, 0);
+
+  body.couponCode = selectedCoupon.code;
+  body.discountType = selectedCoupon.type;
+  body.discountValue = selectedCoupon.value;
+  body.discountAmount = discount;
+  body.price = finalPrice;
+} else {
+  // Si no hay cupón, guardamos el precio normal
+  body.price = priceForPlayers(selectedRoom, values.players);
+}
+
+
+
+
 
   if (values.customerSelectId === "__new__") {
     body.customerName = `${values.firstName ?? ""} ${values.lastName ?? ""}`.trim();
@@ -458,6 +527,60 @@ export default function ReservationModal({
                       </FormItem>
                     )}
                   />
+
+                  {/* Cupón */}
+{coupons.length > 0 && (
+  <div className="space-y-1">
+    <FormLabel>Cupón</FormLabel>
+    <FormDescription>Selecciona un cupón válido (si aplica)</FormDescription>
+    <Select
+      value={selectedCoupon?.code || ""}
+      onValueChange={(code) => {
+        const coupon = coupons.find(
+          (c) =>
+            c.code === code &&
+            (!c.roomId || c.roomId === selectedRoom?._id)
+        );
+        if (coupon) {
+          setSelectedCoupon(coupon);
+          toast.success(
+            `Cupón ${coupon.code} aplicado: ${
+              coupon.type === "percent"
+                ? `${coupon.value}%`
+                : `-${coupon.value}€`
+            }`
+          );
+        } else {
+          setSelectedCoupon(null);
+          toast.error("Cupón no válido para esta sala");
+        }
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecciona cupón" />
+      </SelectTrigger>
+      <SelectContent>
+        {coupons
+          .filter(
+            (c) =>
+              !c.roomId ||
+              c.roomId === selectedRoom?._id
+          )
+          .map((c) => (
+            <SelectItem key={c.code} value={c.code}>
+              {c.code} ({c.type === "percent" ? `${c.value}%` : `-${c.value}€`})
+            </SelectItem>
+          ))}
+      </SelectContent>
+    </Select>
+    {selectedCoupon && (
+      <p className="text-xs text-green-600">
+        Cupón aplicado: {selectedCoupon.code}
+      </p>
+    )}
+  </div>
+)}
+
 
                   {/* Calendario + horas */}
                   <FormItem>

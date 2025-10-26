@@ -36,6 +36,7 @@ export function DashboardHeader() {
     { href: "/dashboard/bookings", label: "Reservas" },
     { href: "/dashboard/customers", label: "Clientes" },
     { href: "/dashboard/employees", label: "Empleados" },
+    { href: "/dashboard/coupons", label: "Cupones" },
   ];
 
   // Helpers de estado activo
@@ -114,7 +115,7 @@ export function DashboardHeader() {
           >
             <Link href="/bookings">
               <Calendar className="h-4 w-4 mr-1" />
-              Demo reserva clientes
+              Demo
             </Link>
           </Button>
         </div>
