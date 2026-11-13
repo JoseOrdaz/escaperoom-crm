@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
-import nodemailer from "nodemailer";
+import { createMailer } from "@/lib/mailer";
+import { findOrCreateCustomer } from "@/lib/customers";
 
 
 /* ───────────────────────────────
@@ -128,39 +129,38 @@ const priceRow = (room.priceTable ?? []).find(
 );
 let price = Number(priceRow?.price ?? 0);
 
-  // 🧾 Aplicar cupón si lo hay
+  // 🧾 Cupón: si es el mismo que ya tenía la reserva se conserva tal cual
+  // (sin volver a validar fechas ni sumar otro uso); si cambia, se valida el nuevo.
+  const existing = await db
+    .collection("reservations")
+    .findOne({ _id }, { projection: { coupon: 1 } });
+  const requestedCode = body.couponCode ? String(body.couponCode).toUpperCase().trim() : "";
   let appliedCoupon: any = null;
-  if (body.couponCode) {
+  let newCouponId: ObjectId | null = null;
+  if (requestedCode && existing?.coupon?.code?.toUpperCase() === requestedCode) {
+    appliedCoupon = existing.coupon;
+  } else if (requestedCode) {
     const coupon = await db.collection("coupons").findOne({
-      code: body.couponCode.toUpperCase(),
+      code: requestedCode,
       startDate: { $lte: new Date() },
       endDate: { $gte: new Date() },
       $or: [{ roomId: null }, { roomId }],
     });
-
-    if (coupon) {
-      // Calcular descuento
-      if (coupon.type === "percent") {
-        price = Math.max(0, price - (price * coupon.value) / 100);
-      } else if (coupon.type === "amount") {
-        price = Math.max(0, price - coupon.value);
-      }
-
-      appliedCoupon = {
-        code: coupon.code,
-        type: coupon.type,
-        value: coupon.value,
-      };
-
-      // Incrementar contador de uso si es necesario
-      await db.collection("coupons").updateOne(
-        { _id: coupon._id },
-        { $inc: { usedCount: 1 } }
+    if (!coupon) {
+      return NextResponse.json(
+        { ok: false, error: "El cupón no es válido para esta sala o ha caducado" },
+        { status: 400 }
       );
     }
+    appliedCoupon = { code: coupon.code, type: coupon.type, value: coupon.value };
+    newCouponId = coupon._id;
   }
-
-
+  if (appliedCoupon) {
+    price =
+      appliedCoupon.type === "percent"
+        ? Math.max(0, price - (price * appliedCoupon.value) / 100)
+        : Math.max(0, price - appliedCoupon.value);
+  }
     // Construir update limpio
     const update: any = {
       roomId,
@@ -180,21 +180,13 @@ let price = Number(priceRow?.price ?? 0);
 
     // Cliente
     if (body.customerEmail) {
-      const email = String(body.customerEmail).toLowerCase().trim();
-      const name = (body.customerName ?? email).toString().trim();
-      const phone = (body.customerPhone ?? "").toString().trim();
-
-      await db.collection("customers").updateOne(
-        { email },
-        { $set: { name, email, phone, updatedAt: new Date() } },
-        { upsert: true }
-      );
-
-      const cDoc = await db
-        .collection("customers")
-        .findOne({ email }, { projection: { _id: 1 } });
-
-      if (cDoc?._id) update.customerId = cDoc._id;
+      // Ya no sobrescribimos el cliente que comparta email: buscamos el que
+      // coincida también en teléfono/nombre o creamos uno nuevo.
+      update.customerId = await findOrCreateCustomer(db, {
+        name: body.customerName,
+        email: String(body.customerEmail),
+        phone: body.customerPhone,
+      });
     } else if (body.customerId) {
       const cid = safeObjectId(body.customerId);
       if (cid) update.customerId = cid;
@@ -239,6 +231,9 @@ if (body.status !== "cancelada") {
         { status: 404 }
       );
     }
+    if (newCouponId) {
+      await db.collection("coupons").updateOne({ _id: newCouponId }, { $inc: { usedCount: 1 } });
+    }
 
     /* ─────────────── Envío opcional de correo ─────────────── */
 if (body.sendEmail && (body.status === "pendiente" || body.status === "cancelada")) {
@@ -250,15 +245,7 @@ if (body.sendEmail && (body.status === "pendiente" || body.status === "cancelada
       : null;
     if (!customer?.email) throw new Error("Cliente sin email");
 
-    const transporter = nodemailer.createTransport({
-      host: "smtp-relay.brevo.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: "joseordazsuay@gmail.com",
-        pass: "JbLtCYxUfHn4awkh",
-      },
-    });
+    const transporter = createMailer();
 
     function normalizeText(text: string) {
       return text

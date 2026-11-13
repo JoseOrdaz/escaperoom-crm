@@ -20,6 +20,7 @@ const weekTemplate = z.object({
 const dayOff = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.string().max(120).optional().or(z.literal("")),
+  message: z.string().max(240).optional().or(z.literal("")),
 });
 
 const override = z.object({
@@ -80,7 +81,7 @@ function normSchedule(s: any) {
       sunday: normSlots(t.sunday),
     },
     daysOff: daysOff
-      .map((d: any) => ({ date: d?.date, reason: d?.reason ?? "" }))
+      .map((d: any) => ({ date: d?.date, reason: d?.reason ?? "", message: d?.message ?? "" }))
       .filter((d: any) => typeof d.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.date)),
     overrides: overrides
       .map((o: any) => ({ date: o?.date, slots: normSlots(o?.slots) }))

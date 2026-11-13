@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,19 @@ import {
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormDescription,
 } from "@/components/ui/form";
-import { Calendar } from "@/components/ui/calendar";
+import { SlotPicker, type DayStatus } from "@/components/reservations/slot-picker";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { Clock, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Clock, CheckCircle, XCircle, Loader2, UserPlus, DoorOpen, CalendarDays, UserRound, FileText, Save, Languages } from "lucide-react";
+
+const LANGUAGES = [
+  { value: "es", label: "Español" },
+  { value: "en", label: "Inglés" },
+  { value: "ru", label: "Ruso" },
+] as const;
 
 
 /* ============ Tipos ============ */
@@ -141,6 +147,7 @@ export default function ReservationModal({
   reservation,
   onSaved,
   rooms: roomsProp,
+  initialDate,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -148,6 +155,8 @@ export default function ReservationModal({
   reservation?: ReservationForEdit | null;
   onSaved?: (id: string) => void;
   rooms?: Room[];
+  /** YYYY-MM-DD preseleccionado al crear (p. ej. al pulsar un día del calendario) */
+  initialDate?: string;
 }) {
   const [roomsLocal, setRoomsLocal] = useState<Room[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -160,6 +169,7 @@ export default function ReservationModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [selectedCoupon, setSelectedCoupon] = useState<any | null>(null);
+  const [customerDraft, setCustomerDraft] = useState({ name: "", email: "", phone: "" });
 
 
 
@@ -175,6 +185,26 @@ export default function ReservationModal({
   const watchRoomId = form.watch("roomId");
   const watchPlayers = form.watch("players");
   const watchCustomer = form.watch("customerSelectId");
+
+  const selectedCustomer = useMemo(
+    () =>
+      watchCustomer && watchCustomer !== "__new__"
+        ? customers.find((c) => String(c._id) === String(watchCustomer))
+        : undefined,
+    [customers, watchCustomer]
+  );
+  useEffect(() => {
+    setCustomerDraft({
+      name: selectedCustomer?.name ?? "",
+      email: selectedCustomer?.email ?? "",
+      phone: selectedCustomer?.phone ?? "",
+    });
+  }, [selectedCustomer]);
+  const customerChanged =
+    !!selectedCustomer &&
+    (customerDraft.name.trim() !== (selectedCustomer.name ?? "") ||
+      customerDraft.email.trim().toLowerCase() !== (selectedCustomer.email ?? "").toLowerCase() ||
+      customerDraft.phone.trim() !== (selectedCustomer.phone ?? ""));
 
   const selectedRoom = useMemo(
     () => (roomsProp ?? roomsLocal).find((r) => r._id === watchRoomId),
@@ -258,11 +288,10 @@ useEffect(() => {
     // Esperar a que los clientes estén cargados antes de resetear
     if (!customers.length) return;
 
-    const foundCustomer = customers.find(
-      (c) =>
-        c._id === reservation.customer?.id ||
-        c.email === reservation.customer?.email
-    );
+    // Primero por id (varios clientes pueden compartir email)
+    const foundCustomer =
+      customers.find((c) => String(c._id) === String(reservation.customer?.id)) ??
+      customers.find((c) => c.email === reservation.customer?.email);
 
     form.reset({
       roomId: reservation.roomId,
@@ -281,16 +310,18 @@ useEffect(() => {
     );
   } else {
     form.reset({ roomId: "", players: undefined, language: "es" });
-    setSelectedDate(null);
+    setSelectedDate(initialDate ? new Date(`${initialDate}T00:00:00`) : null);
     setSelectedSlot(null);
   }
-}, [open, mode, reservation, form, customers, coupons]);
+}, [open, mode, reservation, form, customers, coupons, initialDate]);
 
 
 
   const reservationsByDay = useMemo(() => {
     const map: Record<string, { start: string; end: string }[]> = {};
-    reservations.forEach((r) => {
+    reservations
+      .filter((r) => !(mode === "edit" && reservation?._id && String(r._id) === String(reservation._id)))
+      .forEach((r) => {
       const d = new Date(r.start);
       const day = d.toLocaleDateString("sv-SE");
       const start = hhmmFromISO(r.start);
@@ -299,9 +330,9 @@ useEffect(() => {
       map[day].push({ start, end });
     });
     return map;
-  }, [reservations]);
+  }, [reservations, mode, reservation?._id]);
 
-  const getDayStatus = (d: Date) => {
+  const getDayStatus = (d: Date): DayStatus => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (d < today) return "disabled";
@@ -355,6 +386,35 @@ useEffect(() => {
     return toast.error("Selecciona fecha y hora");
 
   setLoading(true); // 👈 activar loading
+
+  if (selectedCustomer && customerChanged) {
+    if (!customerDraft.name.trim() || !/^\S+@\S+\.\S+$/.test(customerDraft.email.trim())) {
+      setLoading(false);
+      return toast.error("Revisa el nombre y el email del cliente");
+    }
+    try {
+      const r = await fetch(`/api/customers/${selectedCustomer._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: customerDraft.name.trim(),
+          email: customerDraft.email.trim(),
+          phone: customerDraft.phone.trim(),
+        }),
+      });
+      if (!r.ok) throw new Error();
+      setCustomers((list) =>
+        list.map((c) =>
+          c._id === selectedCustomer._id
+            ? { ...c, name: customerDraft.name.trim(), email: customerDraft.email.trim().toLowerCase(), phone: customerDraft.phone.trim() }
+            : c
+        )
+      );
+    } catch {
+      setLoading(false);
+      return toast.error("No se han podido guardar los datos del cliente");
+    }
+  }
 
   const [start, end] = selectedSlot.split("-");
   const body: Record<string, any> = {
@@ -437,24 +497,24 @@ useEffect(() => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl sm:max-w-xl h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>
-            {mode === "edit" ? "Editar reserva" : "Crear nueva reserva"}
-          </DialogTitle>
+      <DialogContent className="flex max-h-[min(90dvh,900px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="border-b px-6 py-5 pr-12 text-left sm:px-7">
+          <DialogTitle className="text-xl tracking-tight">{mode === "edit" ? "Editar reserva" : "Nueva reserva"}</DialogTitle>
+          <DialogDescription>{mode === "edit" ? "Puedes modificar cualquier dato de la reserva." : "Completa los datos de la sesión y del cliente."}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-scroll pr-2 space-y-6">
+        <div className="min-h-0 overflow-y-auto px-6 py-6 sm:px-7">
           <Form {...form}>
             <form
                 id="reservation-form"
                 onSubmit={form.handleSubmit(submit, () => {
                   // Cuando hay errores de validación
-                  setFormError("⚠️ Revisa todos los campos obligatorios");
+                  setFormError("Revisa todos los campos obligatorios");
                 })}
                 className="space-y-6 pb-6"
               >
 
+              <div className="flex items-center gap-3 border-b pb-4"><span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><DoorOpen className="size-4" /></span><div><h3 className="text-sm font-semibold">Experiencia</h3><p className="text-xs text-muted-foreground">Sala, jugadores y descuento</p></div></div>
               {/* Sala */}
               <FormField
                 control={form.control}
@@ -467,12 +527,13 @@ useEffect(() => {
                       value={field.value}
                       onValueChange={(v) => {
                         field.onChange(v);
-                        setSelectedDate(null);
+                        // Conserva el día (al editar o si viene del calendario); la hora se vuelve a elegir
+                        setSelectedDate((d) => (mode === "edit" || initialDate ? d : null));
                         setSelectedSlot(null);
                       }}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Selecciona sala" />
                         </SelectTrigger>
                       </FormControl>
@@ -507,7 +568,7 @@ useEffect(() => {
                           onValueChange={(v) => field.onChange(Number(v))}
                         >
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="w-full">
                               <SelectValue placeholder="Selecciona número de jugadores" />
                             </SelectTrigger>
                           </FormControl>
@@ -528,26 +589,54 @@ useEffect(() => {
                     )}
                   />
 
+                  {/* Idioma */}
+                  <FormField
+                    control={form.control}
+                    name="language"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Idioma de la sesión *</FormLabel>
+                        <FormDescription>Idioma en el que se hará el juego y los correos</FormDescription>
+                        <Select value={field.value ?? "es"} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <span className="flex items-center gap-2">
+                                <Languages className="size-4 text-muted-foreground" />
+                                <SelectValue placeholder="Selecciona idioma" />
+                              </span>
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {LANGUAGES.map((l) => (
+                              <SelectItem key={l.value} value={l.value}>
+                                {l.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+
                   {/* Cupón */}
-{coupons.length > 0 && (
+{(coupons.length > 0 || selectedCoupon) && (() => {
+  const roomCoupons = coupons.filter((c) => !c.roomId || c.roomId === selectedRoom?._id);
+  const currentMissing = selectedCoupon && !roomCoupons.some((c) => c.code === selectedCoupon.code);
+  return (
   <div className="space-y-1">
     <FormLabel>Cupón</FormLabel>
     <FormDescription>Selecciona un cupón válido (si aplica)</FormDescription>
     <Select
-      value={selectedCoupon?.code || ""}
+      value={selectedCoupon?.code || "__none__"}
       onValueChange={(code) => {
-        const coupon = coupons.find(
-          (c) =>
-            c.code === code &&
-            (!c.roomId || c.roomId === selectedRoom?._id)
-        );
+        if (code === "__none__") return setSelectedCoupon(null);
+        if (code === selectedCoupon?.code) return;
+        const coupon = roomCoupons.find((c) => c.code === code);
         if (coupon) {
           setSelectedCoupon(coupon);
           toast.success(
             `Cupón ${coupon.code} aplicado: ${
-              coupon.type === "percent"
-                ? `${coupon.value}%`
-                : `-${coupon.value}€`
+              coupon.type === "percent" ? `${coupon.value}%` : `-${coupon.value}€`
             }`
           );
         } else {
@@ -556,100 +645,53 @@ useEffect(() => {
         }
       }}
     >
-      <SelectTrigger>
+      <SelectTrigger className="w-full" aria-label="Cupón">
         <SelectValue placeholder="Selecciona cupón" />
       </SelectTrigger>
       <SelectContent>
-        {coupons
-          .filter(
-            (c) =>
-              !c.roomId ||
-              c.roomId === selectedRoom?._id
-          )
-          .map((c) => (
-            <SelectItem key={c.code} value={c.code}>
-              {c.code} ({c.type === "percent" ? `${c.value}%` : `-${c.value}€`})
-            </SelectItem>
-          ))}
+        <SelectItem value="__none__">Sin cupón</SelectItem>
+        {currentMissing && (
+          <SelectItem value={selectedCoupon.code}>
+            {selectedCoupon.code} ({selectedCoupon.type === "percent" ? `${selectedCoupon.value}%` : `-${selectedCoupon.value}€`}) · actual
+          </SelectItem>
+        )}
+        {roomCoupons.map((c) => (
+          <SelectItem key={c.code} value={c.code}>
+            {c.code} ({c.type === "percent" ? `${c.value}%` : `-${c.value}€`})
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
     {selectedCoupon && (
       <p className="text-xs text-green-600">
         Cupón aplicado: {selectedCoupon.code}
+        {currentMissing && " (ya no está vigente, se conserva en esta reserva)"}
       </p>
     )}
   </div>
-)}
+  );
+})()}
 
 
+                  <div className="flex items-center gap-3 border-b pt-2 pb-4"><span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><CalendarDays className="size-4" /></span><div><h3 className="text-sm font-semibold">Fecha y disponibilidad</h3><p className="text-xs text-muted-foreground">Elige una fecha y una hora libre</p></div></div>
                   {/* Calendario + horas */}
                   <FormItem>
                     <FormLabel>Fecha y hora *</FormLabel>
-                    <FormDescription>Selecciona la fecha y hora</FormDescription>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate ?? undefined}
-                        onSelect={(d) => {
-                          setSelectedDate(d ?? null);
-                          setSelectedSlot(null);
-                        }}
-                        className="rounded-md border shadow-sm p-2"
-                        modifiers={{
-                          green: (d) => getDayStatus(d) === "green",
-                          yellow: (d) => getDayStatus(d) === "yellow",
-                          red: (d) => getDayStatus(d) === "red",
-                          disabled: (d) => getDayStatus(d) === "disabled",
-                        }}
-                        modifiersClassNames={{
-                          green:
-                            "bg-green-100 text-green-800 hover:bg-green-200 m-1",
-                          yellow:
-                            "bg-yellow-100 text-yellow-800 hover:bg-yellow-200 m-1",
-                          red: "bg-red-100 text-red-800 m-1",
-                          disabled: "opacity-40 pointer-events-none m-1",
-                        }}
-                      />
-                     <div className="flex flex-wrap content-start items-start gap-2 flex-1">
-
-                        {selectedDate ? (
-                          slotOptions.length ? (
-                            slotOptions.map((s, i) => (
-                              <Button
-                                key={i}
-                                type="button"
-                                variant={
-                                  s.reserved
-                                    ? "secondary"
-                                    : selectedSlot === `${s.start}-${s.end}`
-                                      ? "default"
-                                      : "outline"
-                                }
-                                disabled={s.reserved}
-                                onClick={() =>
-                                  setSelectedSlot(`${s.start}-${s.end}`)
-                                }
-                                className={cn(
-                                  s.reserved && "text-red-500 font-semibold"
-                                )}
-                              >
-                                {s.start}
-                              </Button>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground col-span-full">
-                              No hay franjas disponibles este día.
-                            </p>
-                          )
-                        ) : (
-                          <p className="text-sm text-muted-foreground col-span-full">
-                            Selecciona una fecha.
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    <FormDescription>Elige el día y después una de las horas libres</FormDescription>
+                    <SlotPicker
+                      selectedDate={selectedDate}
+                      onSelectDate={(d) => {
+                        setSelectedDate(d);
+                        setSelectedSlot(null);
+                      }}
+                      getDayStatus={getDayStatus}
+                      slots={slotOptions}
+                      selectedSlot={selectedSlot}
+                      onSelectSlot={setSelectedSlot}
+                    />
                   </FormItem>
 
+                  <div className="flex items-center gap-3 border-b pt-2 pb-4"><span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><UserRound className="size-4" /></span><div><h3 className="text-sm font-semibold">Cliente</h3><p className="text-xs text-muted-foreground">Selecciona un cliente o añade uno nuevo</p></div></div>
                   {/* Cliente */}
                   <FormField
                     control={form.control}
@@ -660,7 +702,7 @@ useEffect(() => {
                         <FormDescription>Selecciona un cliente o crea uno nuevo</FormDescription>
                         <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="w-full">
                               <SelectValue placeholder="Selecciona cliente" />
                             </SelectTrigger>
                           </FormControl>
@@ -671,13 +713,37 @@ useEffect(() => {
                               </SelectItem>
                             ))}
                             <SelectItem value="__new__">
-                              ➕ Crear nuevo cliente
+                              <span className="inline-flex items-center gap-2"><UserPlus className="size-4" /> Crear nuevo cliente</span>
                             </SelectItem>
                           </SelectContent>
                         </Select>
                       </FormItem>
                     )}
                   />
+
+                  {selectedCustomer && (
+                    <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label htmlFor="customer-name" className="text-sm font-medium">Nombre completo</label>
+                          <Input id="customer-name" value={customerDraft.name} onChange={(e) => setCustomerDraft({ ...customerDraft, name: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="customer-email" className="text-sm font-medium">Email</label>
+                          <Input id="customer-email" type="email" value={customerDraft.email} onChange={(e) => setCustomerDraft({ ...customerDraft, email: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="customer-phone" className="text-sm font-medium">Teléfono</label>
+                          <Input id="customer-phone" type="tel" value={customerDraft.phone} onChange={(e) => setCustomerDraft({ ...customerDraft, phone: e.target.value })} />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {customerChanged
+                          ? "Los cambios se guardarán en la ficha del cliente al guardar la reserva."
+                          : "Puedes corregir los datos del cliente aquí."}
+                      </p>
+                    </div>
+                  )}
 
                   {watchCustomer === "__new__" && (
                     <div className="grid sm:grid-cols-2 gap-4">
@@ -751,6 +817,7 @@ useEffect(() => {
                     )}
                   /> */}
 
+                  <div className="flex items-center gap-3 border-b pt-2 pb-4"><span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span><div><h3 className="text-sm font-semibold">Notas y estado</h3><p className="text-xs text-muted-foreground">Información adicional para la reserva</p></div></div>
                   {/* Notas */}
                   <FormField
                     control={form.control}
@@ -800,6 +867,7 @@ useEffect(() => {
                         <FormControl>
                           <SelectTrigger
                             className={cn(
+                              "w-full",
                               field.value === "pendiente" && "border-yellow-300 text-yellow-700",
                               field.value === "confirmada" && "border-green-300 text-green-700",
                               field.value === "cancelada" && "border-red-300 text-red-700"
@@ -862,7 +930,7 @@ useEffect(() => {
         </div>
 
         {/* Footer fijo */}
-        <DialogFooter className="border-t bg-background p-4 flex sm:justify-between gap-2">
+        <DialogFooter className="border-t bg-card px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
   {mode === "edit" && reservation?._id && (
     <Button
       type="button"
@@ -901,6 +969,7 @@ useEffect(() => {
     </p>
   )}
 
+  <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:ml-auto sm:w-auto">Cancelar</Button>
   <Button
     type="submit"
     form="reservation-form"
@@ -913,9 +982,9 @@ useEffect(() => {
         Guardando...
       </>
     ) : mode === "edit" ? (
-      "Guardar cambios"
+      <><Save className="size-4" /> Guardar cambios</>
     ) : (
-      "Crear reserva"
+      <>Crear reserva</>
     )}
   </Button>
 </DialogFooter>

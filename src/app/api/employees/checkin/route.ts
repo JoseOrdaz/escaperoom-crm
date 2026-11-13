@@ -47,6 +47,7 @@ export async function GET() {
           },
         },
         { $unwind: "$employee" },
+        { $unset: "employee.password" },
         { $sort: { time: -1 } },
       ])
       .toArray();

@@ -94,6 +94,7 @@ const weekTemplateSchema = z.object({
 const dayOffSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD"),
   reason: z.string().max(120).optional().or(z.literal("")),
+  message: z.string().max(240).optional().or(z.literal("")),
 });
 
 const overrideSchema = z.object({
@@ -517,7 +518,7 @@ export function RoomCreateForm() {
           onSubmit,
           () => toast.error("Revisa los campos del formulario")
         )}
-        className="grid gap-8"
+        className="grid grid-cols-[minmax(0,1fr)] gap-8"
       >
         <Tabs defaultValue="details" className="space-y-6">
           <TabsList>
@@ -760,7 +761,7 @@ export function RoomCreateForm() {
               <CardContent className="grid gap-4 pt-6">
                 {DAYS.map((d) => (
                   <div key={d.key} className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <h4 className="font-medium">{d.label}</h4>
                       <Button
                         type="button"
@@ -797,7 +798,7 @@ export function RoomCreateForm() {
                     <p className="text-sm text-muted-foreground">No hay días añadidos.</p>
                   )}
                   {dayOffFields.map((row, idx) => (
-                    <div key={row._key} className="flex items-center gap-3 rounded-lg border p-3">
+                    <div key={row._key} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
                       <FormField
                         control={form.control}
                         name={`schedule.daysOff.${idx}.date`}
@@ -820,12 +821,23 @@ export function RoomCreateForm() {
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={form.control}
+                        name={`schedule.daysOff.${idx}.message`}
+                        render={({ field }) => (
+                          <FormItem className="order-last w-full">
+                            <FormLabel className="text-xs text-muted-foreground">Mensaje para clientes (opcional)</FormLabel>
+                            <FormControl><Input placeholder="Ej.: Este día solo aceptamos grupos por teléfono, llámanos." {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <Button type="button" variant="ghost" size="icon" onClick={() => dayOffRemove(idx)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
-                  <Button type="button" variant="outline" onClick={() => dayOffAppend({ date: "", reason: "" })}>
+                  <Button type="button" variant="outline" onClick={() => dayOffAppend({ date: "", reason: "", message: "" })}>
                     <Plus className="mr-1 h-4 w-4" /> Añadir día de descanso
                   </Button>
                 </CardContent>

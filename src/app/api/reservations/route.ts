@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 import { z } from "zod";
-import nodemailer from "nodemailer";
+import { createMailer } from "@/lib/mailer";
+import { findOrCreateCustomer } from "@/lib/customers";
 
 
 /* ───────── helpers ───────── */
@@ -361,20 +362,11 @@ if (v.couponCode) {
     if (v.customerId) {
       customerId = safeObjectId(v.customerId);
     } else if (v.customerEmail) {
-      const email = v.customerEmail.toLowerCase().trim();
-      const existing = await db.collection("customers").findOne({ email });
-      if (existing) {
-        customerId = existing._id;
-      } else {
-        const resC = await db.collection("customers").insertOne({
-          name: v.customerName ?? email,
-          email,
-          phone: v.customerPhone ?? "",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-        customerId = resC.insertedId;
-      }
+      customerId = await findOrCreateCustomer(db, {
+        name: v.customerName,
+        email: v.customerEmail,
+        phone: v.customerPhone,
+      });
     }
 
     const doc = {
@@ -403,15 +395,7 @@ if (v.couponCode) {
 
 
     try {
-      const transporter = nodemailer.createTransport({
-        host: "smtp-relay.brevo.com",
-        port: 587,
-        secure: false,
-        auth: {
-          user: "joseordazsuay@gmail.com",
-          pass: "JbLtCYxUfHn4awkh",
-        },
-      });
+      const transporter = createMailer();
       function normalizeText(text: string) {
         return text
           .toLowerCase()

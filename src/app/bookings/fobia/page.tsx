@@ -10,5 +10,5 @@ export default function BookingsFobiaPage() {
     "68e22019a4b8222c245033eb", // La Casa de los Fantasmas
   ];
 
-  return <BookingWizard roomIds={roomIds} />;
+  return <BookingWizard roomIds={roomIds} contactPhone="+34 654 60 89 75" />;
 }

@@ -1,9 +1,6 @@
 // src/app/dashboard/reservations/page.tsx
-import { headers } from "next/headers";
 import { Suspense } from "react";
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { ReservationsCalendar } from "./_components/reservations-calendar";
 
 
@@ -12,32 +9,16 @@ export const dynamic = "force-dynamic";
 function startOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function endOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth() + 1, 1); }
 
-async function getInitialReservations(fromISO: string, toISO: string) {
-  try {
-    const p = new URLSearchParams({ from: fromISO, to: toISO });
-    const res = await fetch(`/api/reservations?${p.toString()}`, {
-      cache: "no-store",
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return [];
-    return await res.json();
-  } catch (e) {
-    console.error("Error getInitialReservations:", e);
-    return [];
-  }
-}
-
-
 export default async function ReservationsPage() {
   const now = new Date();
   const from = startOfMonth(now).toISOString().slice(0, 10);
   const to = endOfMonth(now).toISOString().slice(0, 10);
-  const initialReservations = await getInitialReservations(from, to);
+
 
   return (
 
     <>
-    <div className="flex items-center justify-between mb-6">
+    <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
   <div>
     <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
       Calendario de reservas
@@ -50,15 +31,12 @@ export default async function ReservationsPage() {
 
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Calendario de reservas</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando calendario…</div>}>
             <ReservationsCalendar
               initialFromISO={from}
               initialToISO={to}
-              initialReservations={initialReservations}
+              initialReservations={[]}
             />
           </Suspense>
         </CardContent>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -35,10 +36,13 @@ import {
   Building2,
   LogIn,
   LogOut,
+  UserRound,
+  ChevronLeft, ChevronRight, Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { usePathname, useSearchParams } from "next/navigation";
+import { CheckinPanel } from "./_components/checkin-panel";
 
 
 
@@ -48,11 +52,15 @@ export default function EmployeesPage() {
     name: "",
     surname: "",
     email: "",
+    username: "",
+    password: "",
     role: "",
     escape: "Fobia",
   };
 
   const [employees, setEmployees] = useState<any[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [savingEmployee, setSavingEmployee] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<string | null>(null);
   const [openModal, setOpenModal] = useState(false);
@@ -69,7 +77,6 @@ export default function EmployeesPage() {
     end: "",
   });
 
-  const [checkin, setCheckin] = useState({ employeeId: "", type: "" });
   const [records, setRecords] = useState<any[]>([]);
   const [active, setActive] = useState<any[]>([]);
   const [filterEmployee, setFilterEmployee] = useState("__all__");
@@ -99,6 +106,8 @@ export default function EmployeesPage() {
     const method = editing ? "PUT" : "POST";
     const body = editing ? { ...form, _id: editing } : form;
 
+    setSavingEmployee(true);
+    try {
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -106,12 +115,29 @@ export default function EmployeesPage() {
     });
 
     if (res.ok) {
-      toast.success(editing ? "Empleado actualizado" : "Empleado creado");
+      const data = await res.json();
+      toast.success(editing ? "Empleado actualizado" : "Empleado creado", data.reauthRequired ? { description: "Inicia sesión de nuevo para seguir administrando empleados." } : undefined);
       setForm(emptyForm);
       setEditing(null);
       setOpenModal(false);
-      loadEmployees();
+      await loadEmployees();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "No se ha podido guardar el empleado");
     }
+    } catch { toast.error("No se ha podido conectar con el servidor"); }
+    finally { setSavingEmployee(false); }
+  }
+
+  async function deleteEmployee(employee: any) {
+    if (!window.confirm(`¿Eliminar a ${employee.name} ${employee.surname}? Se conservarán sus fichajes y turnos.`)) return;
+    try {
+      const res = await fetch(`/api/employees?id=${encodeURIComponent(employee._id)}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se ha podido eliminar");
+      toast.success("Empleado eliminado");
+      await loadEmployees();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "No se ha podido eliminar"); }
   }
 
   async function loadSchedule() {
@@ -120,27 +146,6 @@ export default function EmployeesPage() {
   }
 
   /* ───── Fichaje ───── */
-
-  async function registerCheck(type: "in" | "out") {
-    if (!checkin.employeeId) {
-      toast.error("Selecciona un empleado");
-      return;
-    }
-
-    const res = await fetch("/api/employees/checkin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeId: checkin.employeeId, type }),
-    });
-
-    if (res.ok) {
-      toast.success(type === "in" ? "✅ Entrada registrada" : "🚪 Salida registrada");
-      setCheckin({ employeeId: "", type: "" });
-      await loadRecords(); // recarga estado al instante
-    } else {
-      toast.error("Error al registrar fichaje");
-    }
-  }
 
   /* Cargar registros */
   async function loadRecords() {
@@ -158,6 +163,7 @@ export default function EmployeesPage() {
   /* ───── Hooks ───── */
   useEffect(() => {
     loadEmployees();
+    fetch("/api/profile", { cache: "no-store" }).then((res) => res.ok ? res.json() : null).then((user) => setIsAdmin(user?.role === "admin")).catch(() => setIsAdmin(false));
   }, []);
 
   useEffect(() => {
@@ -197,7 +203,7 @@ useEffect(() => {
   /* ───── Render ───── */
   return (
     <>
-    <div className="flex items-center justify-between mb-6">
+    <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
   <div>
     <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
       Empleados
@@ -208,19 +214,19 @@ useEffect(() => {
   </div>
 </div>
 
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <Tabs value={tabValue} onValueChange={setTabValue}>
-        <TabsList className="grid grid-cols-4 w-full">
-          <TabsTrigger value="list">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-white p-1.5 sm:grid-cols-4">
+          <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="list">
             <Users className="w-4 h-4 mr-1" /> Empleados
           </TabsTrigger>
-          <TabsTrigger value="calendar">
+          <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="calendar">
             <CalendarDays className="w-4 h-4 mr-1" /> Calendario
           </TabsTrigger>
-          <TabsTrigger value="checkin">
+          <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="checkin">
             <Clock3 className="w-4 h-4 mr-1" /> Fichaje
           </TabsTrigger>
-          <TabsTrigger value="history">
+          <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="history">
             <ClipboardList className="w-4 h-4 mr-1" /> Registro
           </TabsTrigger>
         </TabsList>
@@ -230,10 +236,15 @@ useEffect(() => {
 
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold flex items-center gap-2">
-                  <Users className="w-5 h-5" /> Empleados
-                </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-lg font-semibold">
+                    <Users className="h-5 w-5 text-primary" /> Equipo
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {employees.length} {employees.length === 1 ? "empleado" : "empleados"} · {active.length} en turno ahora
+                  </p>
+                </div>
             <Dialog
               open={openModal}
               onOpenChange={(open) => {
@@ -245,7 +256,7 @@ useEffect(() => {
               }}
             >
               <DialogTrigger asChild>
-                <Button
+                <Button disabled={!isAdmin}
                   onClick={() => {
                     setEditing(null);
                     setForm(emptyForm);
@@ -256,7 +267,7 @@ useEffect(() => {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
                 <DialogHeader>
                   <DialogTitle>
                     {editing ? "Editar empleado" : "Añadir empleado"}
@@ -265,64 +276,66 @@ useEffect(() => {
 
                 <div className="grid gap-3 py-2">
   <div className="grid grid-cols-2 gap-2">
-    <Input
+    <div className="space-y-2"><Label htmlFor="employee-name">Nombre</Label><Input id="employee-name"
       placeholder="Nombre"
       value={form.name}
       onChange={(e) => setForm({ ...form, name: e.target.value })}
     />
-    <Input
+    </div><div className="space-y-2"><Label htmlFor="employee-surname">Apellidos</Label><Input id="employee-surname"
       placeholder="Apellidos"
       value={form.surname}
       onChange={(e) => setForm({ ...form, surname: e.target.value })}
     />
+    </div>
   </div>
 
-  <Input
+  <div className="space-y-2"><Label htmlFor="employee-email">Correo electrónico</Label><Input id="employee-email" type="email"
     placeholder="Email"
     value={form.email}
     onChange={(e) => setForm({ ...form, email: e.target.value })}
   />
 
-  <Input
+  </div><div className="space-y-2"><Label htmlFor="employee-username">Usuario (opcional)</Label><Input id="employee-username"
     placeholder="Usuario (opcional)"
     value={form.username || ""}
     onChange={(e) => setForm({ ...form, username: e.target.value })}
   />
 
-  <Input
+  </div><div className="space-y-2"><Label htmlFor="employee-password">{editing ? "Nueva contraseña (opcional)" : "Contraseña"}</Label><Input id="employee-password"
     type="password"
-    placeholder="Contraseña"
+    placeholder={editing ? "Dejar vacía para mantener la actual" : "Al menos 8 caracteres"}
+    autoComplete="new-password"
     value={form.password || ""}
     onChange={(e) => setForm({ ...form, password: e.target.value })}
   />
 
-  <Select
+  </div><div className="space-y-2"><Label htmlFor="employee-role">Rol</Label><Select
     value={form.role}
     onValueChange={(v) => setForm({ ...form, role: v })}
   >
-    <SelectTrigger>
+    <SelectTrigger id="employee-role" className="w-full">
       <SelectValue placeholder="Rol del empleado" />
     </SelectTrigger>
     <SelectContent>
-      <SelectItem value="admin">🧩 Administrador</SelectItem>
-      <SelectItem value="game_master">🎮 Game Master</SelectItem>
+      <SelectItem value="admin">Administrador</SelectItem>
+      <SelectItem value="game_master">Game Master</SelectItem>
     </SelectContent>
   </Select>
 
-  <Select
+  </div><div className="space-y-2"><Label htmlFor="employee-escape">Escape asociado</Label><Select
     value={form.escape}
     onValueChange={(v) => setForm({ ...form, escape: v })}
   >
-    <SelectTrigger>
+    <SelectTrigger id="employee-escape" className="w-full">
       <SelectValue placeholder="Escape asociado" />
     </SelectTrigger>
     <SelectContent>
-      <SelectItem value="Fobia">🏠 Fobia</SelectItem>
-      <SelectItem value="Action Gates">🚪 Action Gates</SelectItem>
+      <SelectItem value="Fobia">Fobia</SelectItem>
+      <SelectItem value="Action Gates">Action Gates</SelectItem>
     </SelectContent>
   </Select>
 
-  <DialogFooter className="flex justify-end gap-2 mt-3">
+  </div><DialogFooter className="flex justify-end gap-2 mt-3">
     <Button
       variant="outline"
       onClick={() => {
@@ -333,8 +346,8 @@ useEffect(() => {
     >
       Cancelar
     </Button>
-    <Button onClick={saveEmployee}>
-      {editing ? "Guardar cambios" : "Crear empleado"}
+    <Button onClick={saveEmployee} disabled={savingEmployee}>
+      {savingEmployee ? "Guardando…" : editing ? "Guardar cambios" : "Crear empleado"}
     </Button>
   </DialogFooter>
 </div>
@@ -347,46 +360,14 @@ useEffect(() => {
 
           
           {/* Listado de empleados */}
-          <div className="grid md:grid-cols-3 gap-4  ">
-            {employees.map((emp) => (
-              <Card
-                key={emp._id}
-                className="hover:shadow-md transition border border-border/60"
-              >
-                <CardHeader className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={emp.avatar || "/avatar-default.png"} />
-                    <AvatarFallback>
-                      {emp.name[0]}
-                      {emp.surname[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <CardTitle className="text-lg font-semibold">
-                      {emp.name} {emp.surname}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Building2 className="w-3 h-3" /> {emp.escape}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {emp.role} · {emp.email}
-                    </p>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditing(emp._id);
-                      setForm(emp);
-                      setOpenModal(true);
-                    }}
-                  >
-                    <Pencil className="w-4 h-4 mr-1" /> Editar
-                  </Button>
-                </CardContent>
-              </Card>
+          <div className="divide-y rounded-xl border">
+            {employees.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">No hay empleados registrados.</p> : employees.map((emp) => (
+              <div key={emp._id} className="flex flex-wrap items-center gap-4 p-4 sm:px-5">
+                <div className="relative"><Avatar className="size-11"><AvatarImage src={emp.avatar || "/avatar-default.png"} /><AvatarFallback className="bg-primary/10 font-medium text-primary">{emp.name?.[0]}{emp.surname?.[0]}</AvatarFallback></Avatar>{active.some((r) => String(r.employeeId) === String(emp._id)) && <span title="En turno" className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-card bg-emerald-500" />}</div>
+                <div className="min-w-0 flex-1"><p className="font-semibold">{emp.name} {emp.surname}</p><p className="mt-1 break-all text-sm text-muted-foreground">{emp.email}</p></div>
+                <div className="flex w-full flex-wrap items-center gap-2 pl-[60px] sm:w-60 sm:pl-0"><span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${emp.role === "admin" ? "bg-primary/10 text-primary" : "bg-sky-500/10 text-sky-700"}`}>{emp.role === "admin" ? "Administrador" : emp.role === "game_master" ? "Game Master" : emp.role}</span><span className="flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"><Building2 className="size-3" />{emp.escape || "Sin escape"}</span></div>
+                {isAdmin && <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => { setEditing(emp._id); setForm({ ...emp, password: "" }); setOpenModal(true); }}><Pencil className="size-4" />Editar</Button><Button size="sm" variant="outline" className="text-destructive" onClick={() => deleteEmployee(emp)}><Trash2 className="size-4" />Eliminar</Button></div>}
+              </div>
             ))}
           </div>
           </CardContent>
@@ -396,7 +377,7 @@ useEffect(() => {
         {/* ───── CALENDARIO LABORAL ───── */}
         <TabsContent value="calendar">
           <Card>
-            <CardHeader className="flex justify-between items-center">
+            <CardHeader className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <CalendarDays className="w-5 h-5" />
                 <CardTitle>Calendario Laboral Semanal</CardTitle>
@@ -406,15 +387,15 @@ useEffect(() => {
                   <SelectValue placeholder="Selecciona escape" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Fobia">🏠 Fobia</SelectItem>
-                  <SelectItem value="Action Gates">🚪 Action Gates</SelectItem>
+                  <SelectItem value="Fobia">Fobia</SelectItem>
+                  <SelectItem value="Action Gates">Action Gates</SelectItem>
                 </SelectContent>
               </Select>
             </CardHeader>
 
             <CardContent>
               {/* NAV SEMANAL */}
-              <div className="flex justify-between items-center mb-4">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <Button
                   variant="outline"
                   size="sm"
@@ -424,13 +405,13 @@ useEffect(() => {
                     )
                   }
                 >
-                  ← Semana anterior
+                  <ChevronLeft className="size-4" /> Semana anterior
                 </Button>
                 <p className="font-medium">
                   Semana del{" "}
-                  {format(selectedDate!, "dd MMM yyyy", { locale: es })} –{" "}
+                  {format(new Date(selectedDate!.getFullYear(), selectedDate!.getMonth(), selectedDate!.getDate() - selectedDate!.getDay()), "dd MMM yyyy", { locale: es })} –{" "}
                   {format(
-                    new Date(selectedDate!.getTime() + 6 * 86400000),
+                    new Date(selectedDate!.getFullYear(), selectedDate!.getMonth(), selectedDate!.getDate() - selectedDate!.getDay() + 6),
                     "dd MMM yyyy",
                     { locale: es }
                   )}
@@ -444,7 +425,7 @@ useEffect(() => {
                     )
                   }
                 >
-                  Semana siguiente →
+                  Semana siguiente <ChevronRight className="size-4" />
                 </Button>
               </div>
 
@@ -496,8 +477,8 @@ useEffect(() => {
                                 key={idx}
                                 className="rounded-md border bg-muted/40 p-2 text-sm"
                               >
-                                <p className="font-medium">
-                                  👤 {emp ? `${emp.name} ${emp.surname}` : "—"}
+                                <p className="flex items-center gap-1 font-medium">
+                                  <UserRound className="size-4" aria-hidden="true" /> {emp ? `${emp.name} ${emp.surname}` : "—"}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
                                   {s.start} – {s.end}
@@ -520,7 +501,7 @@ useEffect(() => {
 
           {/* MODAL PARA AÑADIR TURNO */}
           <Dialog open={openShiftModal} onOpenChange={setOpenShiftModal}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Asignar turno</DialogTitle>
                 <DialogDescription>
@@ -642,206 +623,7 @@ useEffect(() => {
 
         {/* ───── FICHAJE ───── */}
         <TabsContent value="checkin">
-          <div className="space-y-6">
-            {/* EMPLEADOS ACTIVOS */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Clock3 className="w-5 h-5 text-green-600" />
-                  Empleados en turno
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {active.length === 0 ? (
-                  <p className="text-sm text-muted-foreground col-span-full">
-                    Nadie ha fichado aún hoy 😴
-                  </p>
-                ) : (
-                  active.map((r, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 border rounded-md p-3 bg-green-50 dark:bg-green-900/20 shadow-sm"
-                    >
-                      <div className="relative">
-                        <Avatar className="h-12 w-12 border border-green-500">
-                          <AvatarImage
-                            src={r.employee?.avatar || "/avatar-default.png"}
-                          />
-                          <AvatarFallback>
-                            {r.employee?.name?.[0]}
-                            {r.employee?.surname?.[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full shadow animate-pulse"></span>
-                      </div>
-                      <div>
-                        <p className="font-medium leading-none">
-                          {r.employee?.name} {r.employee?.surname}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Fichado a las {format(new Date(r.time), "HH:mm")} h
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            {/* PANEL DE FICHAJE */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <LogIn className="w-5 h-5 text-primary" /> Registrar fichaje
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="flex flex-col md:flex-row gap-6 justify-between">
-                {/* Selección */}
-                <div className="flex-1 flex flex-col items-center justify-between gap-8 py-8 border rounded-xl bg-muted/10 shadow-sm relative">
-  {/* Selector de empleado (arriba del todo) */}
-  <div className="absolute -top-7 w-full flex justify-center">
-    <div className="w-full max-w-sm">
-      <Select
-        value={checkin.employeeId}
-        onValueChange={(v) => setCheckin({ ...checkin, employeeId: v })}
-      >
-        <SelectTrigger className="h-12 text-base bg-background border-2 border-primary/20 rounded-lg shadow-md focus:ring-2 focus:ring-primary/40 transition-all">
-          <SelectValue placeholder="Selecciona empleado" />
-        </SelectTrigger>
-        <SelectContent>
-          {employees.map((e) => (
-            <SelectItem key={e._id} value={e._id}>
-              {e.name} {e.surname}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  </div>
-
-  {/* Avatar y datos */}
-  <div className="flex flex-col items-center gap-3 pt-10">
-    {checkin.employeeId ? (
-      <>
-        <Avatar className="h-24 w-24 border-4 border-primary/60 shadow-lg">
-          <AvatarImage
-            src={
-              employees.find((e) => e._id === checkin.employeeId)?.avatar ||
-              "/avatar-default.png"
-            }
-          />
-          <AvatarFallback className="text-lg">
-            {
-              employees
-                .find((e) => e._id === checkin.employeeId)
-                ?.name?.[0]
-            }
-            {
-              employees
-                .find((e) => e._id === checkin.employeeId)
-                ?.surname?.[0]
-            }
-          </AvatarFallback>
-        </Avatar>
-        <h3 className="font-semibold text-lg text-center">
-          {
-            employees.find((e) => e._id === checkin.employeeId)?.name
-          }{" "}
-          {
-            employees.find((e) => e._id === checkin.employeeId)?.surname
-          }
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          {
-            employees.find((e) => e._id === checkin.employeeId)?.role ||
-            "Empleado"
-          }
-        </p>
-      </>
-    ) : (
-      <div className="flex flex-col items-center gap-2 text-muted-foreground pt-6">
-        <Users className="w-12 h-12 opacity-50" />
-        <p className="text-sm">Selecciona un empleado para comenzar</p>
-      </div>
-    )}
-  </div>
-
-  {/* Botones Entrada / Salida */}
-  <div className="flex gap-8 justify-center mt-4 pb-2">
-    <Button
-      size="lg"
-      className="relative bg-green-600 hover:bg-green-700 text-white font-semibold w-48 h-14 text-base rounded-xl shadow-lg transition-all hover:scale-[1.03] active:scale-95"
-      onClick={() => registerCheck("in")}
-      disabled={!checkin.employeeId}
-    >
-      <LogIn className="w-5 h-5 mr-2" />
-      Fichar Entrada
-      <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></span>
-    </Button>
-
-    <Button
-      size="lg"
-      variant="destructive"
-      className="relative w-48 h-14 text-base font-semibold rounded-xl shadow-lg transition-all hover:scale-[1.03] active:scale-95"
-      onClick={() => registerCheck("out")}
-      disabled={!checkin.employeeId}
-    >
-      <LogOut className="w-5 h-5 mr-2" />
-      Fichar Salida
-      <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-pulse"></span>
-    </Button>
-  </div>
-</div>
-
-
-
-                {/* Últimos fichajes */}
-                <div className="flex-1 border-l pl-4 max-h-[400px] overflow-y-auto">
-                  <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
-                    <ClipboardList className="w-4 h-4 text-primary" /> Últimos registros
-                  </h3>
-                  {records.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Sin fichajes aún.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {records.slice(0, 10).map((r, i) => (
-                        <div
-                          key={i}
-                          className={`rounded-md p-2 border flex items-center justify-between ${r.type === "in"
-                              ? "border-green-500/50 bg-green-50"
-                              : "border-red-500/50 bg-red-50"
-                            }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage
-                                src={r.employee?.avatar || "/avatar-default.png"}
-                              />
-                              <AvatarFallback>
-                                {r.employee?.name?.[0]}
-                                {r.employee?.surname?.[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <p className="text-sm font-medium">
-                              {r.employee?.name} {r.employee?.surname}
-                            </p>
-                          </div>
-                          <p
-                            className={`text-xs font-semibold ${r.type === "in" ? "text-green-700" : "text-red-600"
-                              }`}
-                          >
-                            {r.type === "in" ? "🟢 Entrada" : "🔴 Salida"} —{" "}
-                            {format(new Date(r.time), "HH:mm")}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <CheckinPanel employees={employees} records={records} active={active} onRegistered={loadRecords} />
         </TabsContent>
 
         {/* ───── REGISTRO ───── */}
@@ -860,7 +642,7 @@ useEffect(() => {
                   onValueChange={(v) => setFilterEmployee(v)}
                   value={filterEmployee}
                 >
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger aria-label="Filtrar por empleado" className="w-[200px]">
                     <SelectValue placeholder="Filtrar por empleado" />
                   </SelectTrigger>
                   <SelectContent>
@@ -876,6 +658,7 @@ useEffect(() => {
                 {/* Filtro por fecha */}
                 <Input
                   type="date"
+                  aria-label="Filtrar por fecha"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
                   className="w-[180px]"
@@ -899,7 +682,7 @@ useEffect(() => {
                     {filteredRecords.map((r, i) => (
                       <div
                         key={i}
-                        className="flex justify-between items-center px-4 py-2 text-sm hover:bg-muted/20 transition"
+                        className="flex flex-wrap items-center justify-between gap-2 px-4 py-4 text-sm hover:bg-muted/30"
                       >
                         <div className="flex items-center gap-2">
                           <Users className="w-4 h-4 text-muted-foreground" />
@@ -908,7 +691,7 @@ useEffect(() => {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {r.type === "in" ? (
                             <LogIn className="w-4 h-4 text-green-600" />
                           ) : (

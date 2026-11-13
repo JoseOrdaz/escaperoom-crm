@@ -11,7 +11,7 @@ import {
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Trash2, Copy, Save, RotateCcw, Trash, CalendarClock } from "lucide-react";
+import { Plus, Trash2, Copy, Save, RotateCcw, Trash, CalendarClock, X, Check } from "lucide-react";
 
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
@@ -94,6 +94,7 @@ const weekTemplateSchema = z.object({
 const dayOffSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.string().max(120).optional().or(z.literal("")),
+  message: z.string().max(240).optional().or(z.literal("")),
 });
 const overrideSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -436,7 +437,7 @@ useEffect(() => {
 }, []);
 
   return (
-    <form onSubmit={form.handleSubmit(onSave)} className="grid gap-8">
+    <form onSubmit={form.handleSubmit(onSave)} className="grid grid-cols-[minmax(0,1fr)] gap-8">
       <Tabs defaultValue="details" className="space-y-6">
         <TabsList>
           <TabsTrigger value="details">Detalles</TabsTrigger>
@@ -536,6 +537,7 @@ useEffect(() => {
                   {name}
                   <button
                     type="button"
+                    aria-label={`Quitar ${name}`}
                     className="ml-1 hover:text-foreground"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -545,7 +547,7 @@ useEffect(() => {
                       );
                     }}
                   >
-                    ✕
+                    <X className="size-3" />
                   </button>
                 </span>
               );
@@ -590,7 +592,7 @@ useEffect(() => {
                         : "opacity-50"
                     }`}
                   >
-                    {selected ? "✓" : ""}
+                    {selected && <Check className="size-3" />}
                   </div>
                   {r.name}
                 </CommandItem>
@@ -682,7 +684,7 @@ useEffect(() => {
             <CardContent className="grid gap-4 pt-6">
               {DAYS.map((d) => (
                 <div key={d.key} className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <h4 className="font-medium">{d.label}</h4>
                     <Button type="button" size="sm" variant="ghost" onClick={() => copyDayToAll(d.key)}>
                       <Copy className="mr-1 h-4 w-4" /> Aplicar a todos los días
@@ -707,7 +709,7 @@ useEffect(() => {
                   <p className="text-sm text-muted-foreground">No hay días añadidos.</p>
                 )}
                 {dayOffFields.map((row, idx) => (
-                  <div key={row._key} className="flex items-center gap-3 rounded-lg border p-3">
+                  <div key={row._key} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
                     <div className="flex-1">
                       <label className="text-xs text-muted-foreground">Fecha</label>
                       <Input type="date" {...form.register(`schedule.daysOff.${idx}.date` as const)} />
@@ -716,12 +718,16 @@ useEffect(() => {
                       <label className="text-xs text-muted-foreground">Motivo</label>
                       <Input placeholder="Festivo / mantenimiento…" {...form.register(`schedule.daysOff.${idx}.reason` as const)} />
                     </div>
+                    <div className="order-last w-full">
+                      <label className="text-xs text-muted-foreground">Mensaje para clientes (opcional)</label>
+                      <Input placeholder="Ej.: Este día solo aceptamos grupos por teléfono, llámanos." {...form.register(`schedule.daysOff.${idx}.message` as const)} />
+                    </div>
                     <Button type="button" variant="ghost" size="icon" onClick={() => dayOffRemove(idx)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                <Button type="button" variant="outline" onClick={() => dayOffAppend({ date: "", reason: "" })}>
+                <Button type="button" variant="outline" onClick={() => dayOffAppend({ date: "", reason: "", message: "" })}>
                   <Plus className="mr-1 h-4 w-4" /> Añadir día de descanso
                 </Button>
               </CardContent>
@@ -751,8 +757,8 @@ useEffect(() => {
       </Tabs>
 
       {/* Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" onClick={() => router.replace("/dashboard/rooms")}>
             <CalendarClock className="mr-2 h-4 w-4" /> Volver al listado
           </Button>

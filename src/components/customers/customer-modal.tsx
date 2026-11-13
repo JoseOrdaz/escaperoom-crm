@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export type CustomerForEdit = {
   _id?: string;   // 👈 lo hacemos opcional para permitir creación
@@ -82,15 +83,17 @@ export default function CustomerModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <Input
+        <div className="space-y-4">
+          <div className="space-y-2"><Label htmlFor="customer-name">Nombre</Label>
+          <Input id="customer-name"
             placeholder="Nombre"
             value={form?.name ?? ""}
             onChange={(e) =>
               setForm((f) => ({ ...f, name: e.target.value }))
             }
           />
-          <Input
+          </div><div className="space-y-2"><Label htmlFor="customer-email">Correo electrónico</Label>
+          <Input id="customer-email"
             placeholder="Email"
             type="email"
             value={form?.email ?? ""}
@@ -98,13 +101,15 @@ export default function CustomerModal({
               setForm((f) => ({ ...f, email: e.target.value }))
             }
           />
-          <Input
+          </div><div className="space-y-2"><Label htmlFor="customer-phone">Teléfono</Label>
+          <Input id="customer-phone"
             placeholder="Teléfono"
             value={form?.phone ?? ""}
             onChange={(e) =>
               setForm((f) => ({ ...f, phone: e.target.value }))
             }
           />
+          </div>
         </div>
 
         <DialogFooter>
@@ -112,7 +117,7 @@ export default function CustomerModal({
             Cancelar
           </Button>
           <Button onClick={save} disabled={saving}>
-            Guardar
+            {saving ? "Guardando…" : "Guardar"}
           </Button>
         </DialogFooter>
       </DialogContent>

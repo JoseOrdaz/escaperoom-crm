@@ -9,12 +9,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import {
-  CalendarCheck2, CircleDollarSign, Users,
+  CalendarCheck2, CircleDollarSign, Users, Plus,
 } from "lucide-react";
 import { RowActions } from "./_components/row-actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -145,7 +144,7 @@ export default async function RoomsPage() {
   return (
     <div className="space-y-6">
       {/* Migas + toolbar */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
   <div>
     <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
       Salas
@@ -157,21 +156,21 @@ export default async function RoomsPage() {
 
   <div className="flex items-center gap-2">
     <Button asChild className="shadow-sm hover:shadow-md transition-all">
-      <Link href="/dashboard/rooms/new">+ Añadir sala</Link>
+      <Link href="/dashboard/rooms/new"><Plus className="size-4" /> Añadir sala</Link>
     </Button>
   </div>
 </div>
 
 
       {/* KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {/* Total histórico */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 sm:px-6">
             <CardTitle className="text-sm font-medium">Total reservas</CardTitle>
             <CalendarCheck2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <div className="text-2xl font-bold">{stats.totalReservations}</div>
             <p className="text-xs text-muted-foreground">Histórico</p>
           </CardContent>
@@ -179,11 +178,11 @@ export default async function RoomsPage() {
 
         {/* Este mes */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 sm:px-6">
             <CardTitle className="text-sm font-medium">Reservas este mes</CardTitle>
             <CalendarCheck2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <div className="text-2xl font-bold">{stats.reservationsThisMonth}</div>
             <p className="text-xs text-muted-foreground">Desde el día 1</p>
           </CardContent>
@@ -191,11 +190,11 @@ export default async function RoomsPage() {
 
         {/* Facturado */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 sm:px-6">
             <CardTitle className="text-sm font-medium">Facturado</CardTitle>
             <CircleDollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <div className="text-2xl font-bold">{formatEUR(totalRevenue)}</div>
             <p className="text-xs text-muted-foreground">Bruto total</p>
           </CardContent>
@@ -203,11 +202,11 @@ export default async function RoomsPage() {
 
         {/* Clientes */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 px-4 pb-2 sm:px-6">
             <CardTitle className="text-sm font-medium">Clientes</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <div className="text-2xl font-bold">{totalCustomers}</div>
             <p className="text-xs text-muted-foreground">Únicos en la base</p>
           </CardContent>
@@ -215,18 +214,18 @@ export default async function RoomsPage() {
       </div>
 
       {/* Tabla */}
-      <Card className="p-6">
-        <CardHeader className="pb-0">
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Listado</CardTitle>
           <CardDescription>Resumen de configuración y métricas por sala</CardDescription>
         </CardHeader>
-        <Separator />
-        <CardContent className="p-0">
+        <CardContent>
           {rooms.length === 0 ? (
             <div className="p-10 text-center text-sm text-muted-foreground">
               No hay salas aún. Crea la primera con “Añadir sala”.
             </div>
           ) : (
+            <div className="overflow-hidden rounded-xl border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -275,6 +274,7 @@ export default async function RoomsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

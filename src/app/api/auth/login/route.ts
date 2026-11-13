@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { createProfileSession, PROFILE_COOKIE, SESSION_SECONDS } from "@/lib/profile-session";
 
 export async function POST(req: Request) {
   const { username, password } = await req.json();
@@ -12,6 +13,7 @@ export async function POST(req: Request) {
   // Buscar por email o username
   const user = await db.collection("employees").findOne({
     $or: [{ email: username }, { username }],
+    deletedAt: { $exists: false },
   });
 
   if (!user)
@@ -29,7 +31,9 @@ export async function POST(req: Request) {
     role: user.role,
   };
 
+  const profileToken = await createProfileSession(user._id);
   const response = NextResponse.json({ ok: true, user: sessionData });
+  response.cookies.set(PROFILE_COOKIE, profileToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/", maxAge: SESSION_SECONDS });
   response.cookies.set("session_user", JSON.stringify(sessionData), {
     httpOnly: false, // visible en el navegador
     path: "/",

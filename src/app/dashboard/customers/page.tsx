@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus } from "lucide-react";
+import { Plus, Search, Pencil, Mail, Phone, CalendarCheck, UsersRound, Loader2 } from "lucide-react";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+
+const initials = (name = "") =>
+  name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+import { Input } from "@/components/ui/input";
 import CustomerModal, {
   CustomerForEdit,
 } from "@/components/customers/customer-modal";
@@ -19,23 +24,37 @@ type Customer = {
 
 export default function CustomersTable() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerForEdit | null>(null);
 
   async function fetchCustomers() {
+    setLoading(true);
+    setError(false);
     try {
       const res = await fetch("/api/customers", { cache: "no-store" });
       if (!res.ok) throw new Error(await res.text());
       const json = await res.json();
       setCustomers(json.items ?? []);
     } catch (e) {
+      setError(true);
       toast.error("Error cargando clientes", { description: String(e) });
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  const filteredCustomers = customers.filter((customer) =>
+    [customer.name, customer.email, customer.phone].some((value) =>
+      value?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
+    )
+  );
 
   function openEdit(c: Customer) {
     setEditing({
@@ -50,7 +69,7 @@ export default function CustomersTable() {
   return (
 
     <>
-    <div className="flex items-center justify-between mb-6">
+    <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
   <div>
     <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
       Clientes
@@ -74,50 +93,78 @@ export default function CustomersTable() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Listado de Clientes</CardTitle>
+          <CardTitle>Listado de clientes</CardTitle>
+          <p className="text-sm text-muted-foreground">Busca por nombre, correo o teléfono.</p>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="p-2 text-left">Nombre</th>
-                  <th className="p-2 text-left">Email</th>
-                  <th className="p-2 text-left">Teléfono</th>
-                  <th className="p-2 text-left">Reservas</th>
-                  <th className="p-2 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customers.map((c) => (
-                  <tr key={c._id} className="border-t">
-                    <td className="p-2">{c.name}</td>
-                    <td className="p-2">{c.email}</td>
-                    <td className="p-2">{c.phone || "-"}</td>
-                    <td className="p-2">{c.reservationsCount ?? 0}</td>
-                    <td className="p-2 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEdit(c)}
-                      >
-                        Editar
+          <div className="relative mb-4 max-w-sm">
+            <Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input aria-label="Buscar clientes" placeholder="Buscar clientes" value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" />
+          </div>
+          <div className="space-y-3 sm:hidden">
+            {loading && <p className="py-6 text-center text-sm text-muted-foreground" role="status">Cargando clientes…</p>}
+            {error && <p className="py-6 text-center text-sm text-muted-foreground">No se han podido cargar los clientes. <Button variant="link" onClick={fetchCustomers}>Reintentar</Button></p>}
+            {!loading && !error && filteredCustomers.length === 0 && <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{query ? "No hay clientes que coincidan con la búsqueda." : "No hay clientes registrados."}</p>}
+            {filteredCustomers.map((customer) => <div key={customer._id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{customer.name}</p><p className="mt-1 break-all text-sm text-muted-foreground">{customer.email}</p><p className="mt-1 text-sm text-muted-foreground">{customer.phone || "Sin teléfono"} · {customer.reservationsCount ?? 0} reservas</p></div><Button size="sm" variant="outline" onClick={() => openEdit(customer)}><Pencil className="size-4" />Editar</Button></div></div>)}
+          </div>
+          <div className="hidden overflow-hidden rounded-xl border sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Contacto</TableHead>
+                  <TableHead>Reservas</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading && <TableRow><TableCell colSpan={4} className="py-10 text-center text-muted-foreground" role="status"><Loader2 className="mx-auto size-5 animate-spin text-primary" /><span className="sr-only">Cargando clientes…</span></TableCell></TableRow>}
+                {error && <TableRow><TableCell colSpan={4} className="py-10 text-center text-muted-foreground">No se han podido cargar los clientes. <Button variant="link" onClick={fetchCustomers}>Reintentar</Button></TableCell></TableRow>}
+                {filteredCustomers.map((c) => (
+                  <TableRow key={c._id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary" aria-hidden>
+                          {initials(c.name)}
+                        </span>
+                        <span className="font-medium">{c.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 hover:text-primary hover:underline">
+                        <Mail className="size-3.5 text-muted-foreground" />{c.email}
+                      </a>
+                      {c.phone ? (
+                        <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                          <Phone className="size-3" />{c.phone}
+                        </a>
+                      ) : (
+                        <p className="mt-1 text-xs text-muted-foreground">Sin teléfono</p>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium tabular-nums">
+                        <CalendarCheck className="size-3.5 text-muted-foreground" />
+                        {c.reservationsCount ?? 0}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                        <Pencil className="size-4" />Editar
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-                {customers.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="p-4 text-center text-sm text-muted-foreground"
-                    >
-                      No hay clientes registrados
-                    </td>
-                  </tr>
+                {!loading && !error && filteredCustomers.length === 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={4} className="py-12 text-center text-sm text-muted-foreground">
+                      <UsersRound className="mx-auto mb-2 size-6 opacity-50" />
+                      {query ? "No hay clientes que coincidan con la búsqueda." : "No hay clientes registrados."}
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

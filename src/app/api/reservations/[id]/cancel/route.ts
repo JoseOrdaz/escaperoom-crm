@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
-import nodemailer from "nodemailer";
+import { createMailer } from "@/lib/mailer";
 
 /* ───────── GET o POST ───────── */
 export async function GET(req: Request, { params }: { params: { id: string } }) {
@@ -53,15 +53,7 @@ async function cancelReservation(reservationId: string) {
       const room = await db.collection("rooms").findOne({ _id: reservation.roomId });
       if (!room) throw new Error("Sala no encontrada");
 
-      const transporter = nodemailer.createTransport({
-        host: "smtp-relay.brevo.com",
-        port: 587,
-        secure: false,
-        auth: {
-          user: "joseordazsuay@gmail.com",
-          pass: "JbLtCYxUfHn4awkh",
-        },
-      });
+      const transporter = createMailer();
 
       const normalizeText = (text: string) =>
         text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");

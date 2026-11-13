@@ -10,5 +10,9 @@ export default function BookingsActionGatesPage() {
     
   ];
 
-  return <BookingWizard roomIds={roomIds} />;
+  return (
+    <main className="min-h-dvh px-4 py-6 sm:px-6 sm:py-8">
+      <BookingWizard roomIds={roomIds} contactPhone="+34 692 502 258" />
+    </main>
+  );
 }

@@ -9,10 +9,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Card,
   CardHeader,
-  CardTitle,
   CardDescription,
   CardContent,
-  CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,8 +22,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
-import { motion } from "framer-motion";
-import { Lock, User, DoorOpen, Info } from "lucide-react";
+import { ArrowRight, Loader2, LockKeyhole, UserRound } from "lucide-react";
 
 const schema = z.object({
   username: z.string().min(1, "Introduce el usuario o correo"),
@@ -70,109 +67,48 @@ export default function LoginPage() {
       } else {
         toast.error(json.error || "Credenciales incorrectas");
       }
-    } catch (err) {
+    } catch {
       toast.error("Error de conexión");
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-zinc-900 dark:to-zinc-800">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <Card className="w-[380px] shadow-xl border border-gray-200 dark:border-zinc-700">
-          <CardHeader className="text-center space-y-4">
-            {/* === LOGO DEL CRM === */}
-            <div className="flex items-center justify-center gap-3">
-              <div className="p-3 bg-primary/10 rounded-2xl">
-                <DoorOpen className="h-10 w-10 text-primary" strokeWidth={1.8} />
-              </div>
-              <h1 className="text-3xl font-bold tracking-tight text-primary">
-                Escape CRM
-              </h1>
+    <main className="flex min-h-dvh items-center justify-center bg-[#f3f2f9] px-4 py-10 sm:py-14">
+      <div className="w-full max-w-[460px]">
+        <div className="mb-6 flex items-center justify-center gap-3 text-center">
+          <span className="h-px w-8 bg-primary/25" aria-hidden="true" />
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Panel de gestión</p>
+          <span className="h-px w-8 bg-primary/25" aria-hidden="true" />
+        </div>
+        <Card className="overflow-hidden border-0 bg-white py-0 shadow-[0_24px_80px_-30px_rgba(41,31,90,0.3)]">
+          <div className="bg-[#20243c] px-7 py-8 sm:px-10 sm:py-9">
+            <div className="flex items-center justify-center gap-6 sm:gap-8" aria-label="Fobia Escape Rooms y Action Gates">
+              <img src="/brand/fobia.png" alt="Fobia Escape Rooms" className="h-auto w-[44%] max-w-[160px] object-contain" />
+              <span className="h-12 w-px shrink-0 bg-white/20" aria-hidden="true" />
+              <img src="/brand/action-gates.svg" alt="Action Gates" className="h-auto w-[44%] max-w-[155px] object-contain" />
             </div>
-
-            <div className="pt-2">
-              <CardTitle className="text-xl font-semibold text-gray-800 dark:text-white">
-                Panel de Administración
-              </CardTitle>
-              <CardDescription>
-                Introduce tus credenciales para acceder
-              </CardDescription>
-            </div>
+          </div>
+          <CardHeader className="space-y-2 px-7 pb-0 pt-8 text-center sm:px-10 sm:pt-10">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Bienvenido de nuevo</h1>
+            <CardDescription className="leading-6">Accede para gestionar tus salas, reservas y equipo.</CardDescription>
           </CardHeader>
-
-          <CardContent>
+          <CardContent className="px-7 pb-8 pt-7 sm:px-10 sm:pb-10">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-                <FormField
-                  control={form.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Usuario o correo</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                          <Input placeholder="Usuario o correo electrónico" className="pl-9" {...field} />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contraseña</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                          <Input
-                            type="password"
-                            placeholder="********"
-                            className="pl-9"
-                            {...field}
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <Button type="submit" className="w-full mt-2" disabled={loading}>
-                  {loading ? "Accediendo..." : "Entrar"}
-                </Button>
+                <FormField control={form.control} name="username" render={({ field }) => (
+                  <FormItem><FormLabel>Usuario o correo</FormLabel><FormControl><div className="relative"><UserRound aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Tu usuario o correo" autoComplete="username" className="h-11 pl-10" {...field} /></div></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="password" render={({ field }) => (
+                  <FormItem><FormLabel>Contraseña</FormLabel><FormControl><div className="relative"><LockKeyhole aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="password" placeholder="Tu contraseña" autoComplete="current-password" className="h-11 pl-10" {...field} /></div></FormControl><FormMessage /></FormItem>
+                )} />
+                <Button type="submit" className="mt-2 h-11 w-full" disabled={loading}>{loading ? <><Loader2 className="size-4 animate-spin" /> Accediendo…</> : <>Entrar al CRM <ArrowRight className="size-4" /></>}</Button>
               </form>
             </Form>
-
-            {/* 🔹 Leyenda de demo */}
-            <div className="mt-5 border rounded-md bg-blue-50 dark:bg-blue-900/20 p-3 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2">
-              <Info className="w-4 h-4 mt-[1px]" />
-              <div>
-                <p className="font-semibold">Demo disponible</p>
-                <p>
-                  Usuario: <span className="font-mono text-sm">admin</span>
-                </p>
-                <p>
-                  Contraseña: <span className="font-mono text-sm">fobia2025!</span>
-                </p>
-              </div>
-            </div>
           </CardContent>
-
-          <CardFooter className="text-center text-xs text-muted-foreground">
-            © {new Date().getFullYear()} EscapeRoom CRM · Todos los derechos reservados
-          </CardFooter>
         </Card>
-      </motion.div>
-    </div>
+        <p className="mt-6 text-center text-xs text-muted-foreground">Escape CRM · Gestión de experiencias</p>
+      </div>
+    </main>
   );
 }

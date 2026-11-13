@@ -10,5 +10,5 @@ export default function BookingsActionGatesPage() {
     
   ];
 
-  return <BookingWizard roomIds={roomIds} />;
+  return <BookingWizard roomIds={roomIds} contactPhone="+34 692 502 258" />;
 }
