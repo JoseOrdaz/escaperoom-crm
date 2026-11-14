@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CalendarDays, CalendarRange, Clock3, DoorOpen, ExternalLink, LogOut, Mail, Menu, TicketPercent, Users, UserRoundCog, UserRound } from "lucide-react";
+import { LayoutDashboard, CalendarDays, CalendarRange, Clock3, DoorOpen, ExternalLink, LogOut, Mail, Menu, TicketPercent, Users, UserRoundCog, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -12,6 +12,7 @@ import type { Permission } from "@/lib/permissions";
 
 const groups: { label: string; links: { href: string; label: string; icon: typeof CalendarDays; perm?: Permission }[] }[] = [
   { label: "Operativa", links: [
+    { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
     { href: "/dashboard/bookings", label: "Reservas", icon: CalendarDays, perm: "reservations.view" },
     { href: "/dashboard/reservations", label: "Calendario", icon: CalendarRange, perm: "reservations.view" },
     { href: "/dashboard/emails", label: "Correos", icon: Mail, perm: "emails.view" },
@@ -38,7 +39,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#9298b5]">{group.label}</p>
           <div className="space-y-1">
             {group.links.map(({ href, label, icon: Icon }) => {
-              const active = pathname.startsWith(href);
+              const active = href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
               return <Link key={href} href={href} onClick={onNavigate} aria-current={active ? "page" : undefined} className={`flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${active ? "bg-white/12 text-white" : "text-[#b8bdd2] hover:bg-white/8 hover:text-white"}`}><Icon className="size-[18px] shrink-0" aria-hidden="true" />{label}</Link>;
             })}
           </div>
@@ -74,7 +75,7 @@ export function DashboardHeader() {
     window.addEventListener("profile-updated", refresh);
     return () => window.removeEventListener("profile-updated", refresh);
   }, []);
-  const current = groups.flatMap((group) => group.links).find((link) => pathname.startsWith(link.href));
+  const current = groups.flatMap((group) => group.links).find((link) => (link.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(link.href)));
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     document.cookie = "session_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";

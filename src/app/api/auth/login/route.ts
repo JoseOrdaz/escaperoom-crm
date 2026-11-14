@@ -33,10 +33,14 @@ export async function POST(req: Request) {
 
   const profileToken = await createProfileSession(user._id);
   const response = NextResponse.json({ ok: true, user: sessionData });
-  response.cookies.set(PROFILE_COOKIE, profileToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/", maxAge: SESSION_SECONDS });
+  // "lax": la sesión se mantiene al abrir el CRM desde un enlace externo (email, WhatsApp…).
+  // Las peticiones que modifican datos comprueban además el origen (sameOrigin).
+  response.cookies.set(PROFILE_COOKIE, profileToken, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_SECONDS });
   response.cookies.set("session_user", JSON.stringify(sessionData), {
-    httpOnly: false, // visible en el navegador
+    httpOnly: false, // visible en el navegador (solo para mostrar nombre/rol)
+    sameSite: "lax",
     path: "/",
+    maxAge: SESSION_SECONDS, // misma duración que la sesión real
   });
   return response;
 }

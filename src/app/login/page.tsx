@@ -38,10 +38,17 @@ export default function LoginPage() {
     defaultValues: { username: "", password: "" },
   });
 
-  // 🧹 Limpiar sesión previa al entrar en login
+  // Si ya hay sesión válida, directamente al panel (antes aquí se borraba la cookie
+  // y bastaba con pasar por la home para "perder" la sesión)
   useEffect(() => {
-    document.cookie = "session_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-  }, []);
+    fetch("/api/profile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => {
+        if (user) router.replace("/dashboard");
+        else document.cookie = "session_user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      })
+      .catch(() => {});
+  }, [router]);
 
   // 🔐 Enviar login
   async function onSubmit(values: z.infer<typeof schema>) {
@@ -58,12 +65,7 @@ export default function LoginPage() {
 
       if (res.ok && json.ok) {
         toast.success(`Bienvenido ${json.user.name}`);
-        // Redirigir según rol
-        if (json.user.role === "admin") {
-          router.push("/dashboard/rooms");
-        } else {
-          router.push("/dashboard/bookings");
-        }
+        router.push("/dashboard");
       } else {
         toast.error(json.error || "Credenciales incorrectas");
       }

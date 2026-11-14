@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectDB } from "@/lib/db";
-import { currentProfile, sameOrigin } from "@/lib/profile-session";
+import { currentProfile, sameOrigin, SESSION_SECONDS } from "@/lib/profile-session";
 import { PERMISSION_LABEL, can, employeeEscapes, normalizeRole, type Permission } from "@/lib/permissions";
 
 const schema = z.object({ name: z.string().trim().min(1).max(80), surname: z.string().trim().min(1).max(80), email: z.string().trim().email().max(254), username: z.string().trim().min(1).max(80).optional() });
@@ -30,6 +30,6 @@ export async function PATCH(request: Request) {
   if (existing) return NextResponse.json({ error: "El correo o el usuario ya están en uso" }, { status: 409 });
   await db.collection("employees").updateOne({ _id: user._id }, { $set: { ...data, updatedAt: new Date() } });
   const response = NextResponse.json(present({ ...user, ...data }));
-  response.cookies.set("session_user", JSON.stringify({ id: user._id, name: `${data.name} ${data.surname}`, email: data.email, role: user.role }), { path: "/", sameSite: "lax" });
+  response.cookies.set("session_user", JSON.stringify({ id: user._id, name: `${data.name} ${data.surname}`, email: data.email, role: user.role }), { path: "/", sameSite: "lax", maxAge: SESSION_SECONDS });
   return response;
 }

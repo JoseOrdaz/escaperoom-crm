@@ -26,12 +26,16 @@ export async function POST(req: NextRequest) {
         { ok: false, error: "Faltan campos obligatorios" },
         { status: 400 }
       );
+    if (type === "percent" && Number(value) > 100)
+      return NextResponse.json({ ok: false, error: "Un porcentaje no puede ser mayor que 100" }, { status: 400 });
+    if (await db.collection("coupons").findOne({ code: String(code).trim().toUpperCase() }))
+      return NextResponse.json({ ok: false, error: "Ya existe un cupón con ese código" }, { status: 409 });
 
     const coupon = {
-      code: code.toUpperCase(),
+      code: String(code).trim().toUpperCase(),
       type, // 'percent' | 'amount'
       value: Number(value),
-      roomId: roomId ? new ObjectId(roomId) : null,
+      roomId: roomId && /^[a-f0-9]{24}$/i.test(roomId) ? new ObjectId(roomId) : null,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       maxUses: Number(maxUses),

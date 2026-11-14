@@ -2,7 +2,6 @@ import Link from "next/link";
 import { connectDB } from "@/lib/db";
 import type { ObjectId } from "mongodb";
 import { getAccess, scopedRoomIds } from "@/lib/access";
-import { RoomsCharts, type MonthPoint } from "./_components/rooms-charts";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -141,29 +140,6 @@ async function getStats(roomIds: ObjectId[]) {
 }
 
 
-// ➡️ reservas y facturación de los últimos 6 meses (fechas guardadas como hora de pared en UTC)
-async function getMonthly(roomIds: ObjectId[]): Promise<MonthPoint[]> {
-  const db = await connectDB();
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
-  const rows = await db.collection("reservations").aggregate([
-    { $match: { roomId: { $in: roomIds }, status: { $ne: "cancelada" }, start: { $gte: start } } },
-    { $group: { _id: { y: { $year: "$start" }, m: { $month: "$start" } }, count: { $sum: 1 }, revenue: { $sum: "$price" } } },
-  ]).toArray();
-  const byKey = new Map(rows.map((r) => [`${r._id.y}-${r._id.m}`, r]));
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1));
-    const key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
-    const r = byKey.get(key);
-    return {
-      key,
-      label: d.toLocaleDateString("es-ES", { month: "short", timeZone: "UTC" }).replace(".", ""),
-      count: r?.count ?? 0,
-      revenue: r?.revenue ?? 0,
-    };
-  });
-}
-
 // ➡️ contar clientes totales
 async function getTotalCustomers(roomIds: ObjectId[]): Promise<number> {
   const db = await connectDB();
@@ -175,11 +151,10 @@ async function getTotalCustomers(roomIds: ObjectId[]): Promise<number> {
 export default async function RoomsPage() {
   const access = await getAccess();
   const roomIds = access ? await scopedRoomIds(await connectDB(), access) : [];
-  const [rooms, stats, totalCustomers, monthly] = await Promise.all([
+  const [rooms, stats, totalCustomers] = await Promise.all([
     getRooms(roomIds),
     getStats(roomIds),
     getTotalCustomers(roomIds),
-    getMonthly(roomIds),
   ]);
 
   const totalRevenue = rooms.reduce((a, r) => a + (r.revenue || 0), 0);
@@ -255,12 +230,6 @@ export default async function RoomsPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Gráficas */}
-      <RoomsCharts
-        monthly={monthly}
-        byRoom={rooms.map((r) => ({ name: r.name, revenue: r.revenue, count: r.reservationsCount }))}
-      />
 
       {/* Tabla */}
       <Card>

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Pencil, Mail, Phone, CalendarCheck, UsersRound, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Mail, Phone, CalendarCheck, UsersRound, Loader2, Eye } from "lucide-react";
+import { CustomerSheet } from "@/components/customers/customer-sheet";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 const initials = (name = "") =>
@@ -29,6 +30,7 @@ export default function CustomersTable() {
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerForEdit | null>(null);
+  const [viewing, setViewing] = useState<Customer | null>(null);
 
   async function fetchCustomers() {
     setLoading(true);
@@ -105,7 +107,7 @@ export default function CustomersTable() {
             {loading && <p className="py-6 text-center text-sm text-muted-foreground" role="status">Cargando clientes…</p>}
             {error && <p className="py-6 text-center text-sm text-muted-foreground">No se han podido cargar los clientes. <Button variant="link" onClick={fetchCustomers}>Reintentar</Button></p>}
             {!loading && !error && filteredCustomers.length === 0 && <p className="rounded-xl border p-6 text-center text-sm text-muted-foreground">{query ? "No hay clientes que coincidan con la búsqueda." : "No hay clientes registrados."}</p>}
-            {filteredCustomers.map((customer) => <div key={customer._id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{customer.name}</p><p className="mt-1 break-all text-sm text-muted-foreground">{customer.email}</p><p className="mt-1 text-sm text-muted-foreground">{customer.phone || "Sin teléfono"} · {customer.reservationsCount ?? 0} reservas</p></div><Button size="sm" variant="outline" onClick={() => openEdit(customer)}><Pencil className="size-4" />Editar</Button></div></div>)}
+            {filteredCustomers.map((customer) => <div key={customer._id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-semibold">{customer.name}</p><p className="mt-1 break-all text-sm text-muted-foreground">{customer.email}</p><p className="mt-1 text-sm text-muted-foreground">{customer.phone || "Sin teléfono"} · {customer.reservationsCount ?? 0} reservas</p></div><div className="flex flex-col gap-2"><Button size="sm" onClick={() => setViewing(customer)}><Eye className="size-4" />Ficha</Button><Button size="sm" variant="outline" onClick={() => openEdit(customer)}><Pencil className="size-4" />Editar</Button></div></div></div>)}
           </div>
           <div className="hidden overflow-hidden rounded-xl border sm:block">
             <Table>
@@ -127,7 +129,7 @@ export default function CustomersTable() {
                         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary" aria-hidden>
                           {initials(c.name)}
                         </span>
-                        <span className="font-medium">{c.name}</span>
+                        <button type="button" onClick={() => setViewing(c)} className="font-medium hover:text-primary hover:underline">{c.name}</button>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -149,9 +151,14 @@ export default function CustomersTable() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
-                        <Pencil className="size-4" />Editar
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" onClick={() => setViewing(c)}>
+                          <Eye className="size-4" />Ficha
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                          <Pencil className="size-4" />Editar
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -169,11 +176,25 @@ export default function CustomersTable() {
         </CardContent>
       </Card>
 
+      <CustomerSheet
+        customer={viewing}
+        open={!!viewing}
+        onOpenChange={(o) => !o && setViewing(null)}
+        onEdit={(c) => openEdit({ ...c, reservationsCount: undefined })}
+      />
+
       <CustomerModal
         open={modalOpen}
         onOpenChange={setModalOpen}
         customer={editing}
-        onSaved={fetchCustomers}
+        onSaved={async () => {
+          await fetchCustomers();
+          // Si la ficha está abierta, refrescar sus datos
+          if (viewing && editing?._id === viewing._id) {
+            const res = await fetch(`/api/customers/${viewing._id}`, { cache: "no-store" });
+            if (res.ok) setViewing({ ...viewing, ...(await res.json()) });
+          }
+        }}
       />
     </div>
 

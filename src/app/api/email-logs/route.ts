@@ -33,6 +33,8 @@ export async function GET(req: Request) {
   if (trigger === "auto" || trigger === "manual") filter.trigger = trigger;
   const status = sp.get("status");
   if (status === "sent" || status === "error") filter.status = status;
+  const customerId = sp.get("customerId");
+  if (customerId && /^[a-f0-9]{24}$/i.test(customerId)) filter.customerId = new ObjectId(customerId);
   if (reservationId) {
     if (!/^[a-f0-9]{24}$/i.test(reservationId)) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
