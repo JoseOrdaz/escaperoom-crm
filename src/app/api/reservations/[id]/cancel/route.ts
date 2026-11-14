@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
-import { createMailer } from "@/lib/mailer";
+import { sendLoggedEmail } from "@/lib/email-log";
 
 /* ───────── GET o POST ───────── */
 export async function GET(req: Request, { params }: { params: { id: string } }) {
@@ -53,7 +53,6 @@ async function cancelReservation(reservationId: string) {
       const room = await db.collection("rooms").findOne({ _id: reservation.roomId });
       if (!room) throw new Error("Sala no encontrada");
 
-      const transporter = createMailer();
 
       const normalizeText = (text: string) =>
         text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -139,7 +138,14 @@ async function cancelReservation(reservationId: string) {
         ? `❌ Tu reserva en Fobia Escape Rooms ha sido cancelada`
         : `❌ Tu reserva en Action Gates Skill Room ha sido cancelada`;
 
-      await transporter.sendMail({
+      await sendLoggedEmail(db, {
+        trigger: "auto",
+        event: "cancelled",
+        reservationId: reservation._id,
+        customerId: reservation.customerId,
+        roomName: room.name,
+        reservationStart: reservation.start,
+      }, {
         from: isFobia
           ? '"Fobia Escape Room" <valencia@fobiaescape.com>'
           : '"Action Gates" <valencia@action-gates.com>',

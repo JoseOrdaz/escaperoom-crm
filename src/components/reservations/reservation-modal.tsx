@@ -15,6 +15,7 @@ import {
   Form, FormField, FormItem, FormLabel, FormControl, FormDescription,
 } from "@/components/ui/form";
 import { SlotPicker, type DayStatus } from "@/components/reservations/slot-picker";
+import { CustomerEmailPanel } from "@/components/reservations/customer-email-panel";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
@@ -165,6 +166,7 @@ export default function ReservationModal({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [slotOptions, setSlotOptions] = useState<Array<TimeSlot & { reserved?: boolean }>>([]);
   const [sendEmail, setSendEmail] = useState(false);
+  const [emailMessage, setEmailMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -265,6 +267,8 @@ useEffect(() => {
     form.reset({ roomId: "", players: undefined, language: "es" });
     setSelectedDate(null);
     setSelectedSlot(null);
+    setSendEmail(false);
+    setEmailMessage("");
     return;
   }
 
@@ -428,6 +432,7 @@ useEffect(() => {
     internalNotes: values.internalNotes,
     status: values.status,
     sendEmail,
+    ...(sendEmail && emailMessage.trim() ? { emailMessage: emailMessage.trim() } : {}),
   };
 
   if (selectedCoupon) {
@@ -482,6 +487,10 @@ useEffect(() => {
       });
 
     toast.success("Reserva guardada correctamente");
+    if (json?.email) {
+      if (json.email.ok) toast.success("Correo enviado al cliente");
+      else toast.error("La reserva se guardó, pero el correo no se pudo enviar", { description: json.email.error });
+    }
     onOpenChange(false);
     onSaved?.(json._id ?? "");
   } catch (err: any) {
@@ -491,6 +500,7 @@ useEffect(() => {
   } finally {
     setLoading(false); // 👈 desactivar loading siempre
     setSendEmail(false);
+    setEmailMessage("");
   }
 }
 
@@ -903,25 +913,17 @@ useEffect(() => {
                   
                 />
 
-                {mode === "edit" &&
-                  (form.watch("status") === "pendiente" ||
-                    form.watch("status") === "cancelada") && (
-                    <div className="flex items-center space-x-2 border rounded-md p-3 bg-muted/30">
-                      <input
-                        id="sendEmail"
-                        type="checkbox"
-                        checked={sendEmail}
-                        onChange={(e) => setSendEmail(e.target.checked)}
-                        className="h-4 w-4 accent-primary"
-                      />
-                      <label
-                        htmlFor="sendEmail"
-                        className="text-sm text-muted-foreground cursor-pointer"
-                      >
-                        Enviar correo al cliente informando sobre el estado de la reserva
-                      </label>
-                    </div>
-                  )}
+                {mode === "edit" && reservation?._id && (
+                  <CustomerEmailPanel
+                    reservationId={reservation._id}
+                    customerEmail={selectedCustomer?.email ?? reservation.customer?.email}
+                    status={form.watch("status") ?? "pendiente"}
+                    notify={sendEmail}
+                    onNotifyChange={setSendEmail}
+                    notifyMessage={emailMessage}
+                    onNotifyMessageChange={setEmailMessage}
+                  />
+                )}
 
                 </>
               )}

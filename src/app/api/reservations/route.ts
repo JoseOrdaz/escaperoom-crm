@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 import { z } from "zod";
-import { createMailer } from "@/lib/mailer";
+import { sendLoggedEmail } from "@/lib/email-log";
 import { findOrCreateCustomer } from "@/lib/customers";
 
 
@@ -395,7 +395,6 @@ if (v.couponCode) {
 
 
     try {
-      const transporter = createMailer();
       function normalizeText(text: string) {
         return text
           .toLowerCase()
@@ -554,7 +553,14 @@ if (appliedCoupon) {
         ? `🔐 Tu reserva en Fobia Escape Rooms – ${room.name}`
         : `🎯 Tu reserva en Action Gates Skill Room – ${room.name}`;
 
-      await transporter.sendMail({
+      await sendLoggedEmail(db, {
+        trigger: "auto",
+        event: "created",
+        reservationId: res.insertedId,
+        customerId,
+        roomName: room.name,
+        reservationStart: doc.start,
+      }, {
         from: isFobia
           ? '"Fobia Escape Room" <valencia@fobiaescape.com>'
           : '"Action Gates" <valencia@action-gates.com>',

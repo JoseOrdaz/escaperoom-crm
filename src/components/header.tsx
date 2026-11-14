@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CalendarDays, CalendarRange, Clock3, DoorOpen, ExternalLink, LogOut, Menu, TicketPercent, Users, UserRoundCog, UserRound } from "lucide-react";
+import { CalendarDays, CalendarRange, Clock3, DoorOpen, ExternalLink, LogOut, Mail, Menu, TicketPercent, Users, UserRoundCog, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -12,6 +12,7 @@ const groups = [
   { label: "Operativa", links: [
     { href: "/dashboard/bookings", label: "Reservas", icon: CalendarDays },
     { href: "/dashboard/reservations", label: "Calendario", icon: CalendarRange },
+    { href: "/dashboard/emails", label: "Correos", icon: Mail },
   ] },
   { label: "Cuenta", links: [{ href: "/dashboard/profile", label: "Mi perfil", icon: UserRound }] },
   { label: "Gestión", links: [

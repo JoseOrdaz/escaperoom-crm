@@ -52,7 +52,7 @@ Roles: `admin` and `game_master`. Middleware redirects `game_master` to `/dashbo
 - Rooms can have `linkedRooms` (physically shared spaces): availability/conflict checks query `roomId: { $in: [roomId, ...linkedRooms] }`.
 - Status values: `pendiente | confirmada | cancelada`; calendar views exclude `cancelada`.
 - Dates are built as UTC from `YYYY-MM-DD` + `HH:mm` (`toDateAtLocal`), i.e. wall-clock times stored as UTC — don't apply timezone conversion.
-- Confirmation/cancellation emails are sent via nodemailer (Brevo SMTP) inside the route handlers, with venue (Fobia vs Action Gates) chosen by room name. Redirects use the absolute production URL `https://escaperoom-crm.vercel.app`.
+- Confirmation/cancellation emails are sent from the route handlers through `createMailer()` (`src/lib/mailer.ts`): Brevo HTTP API when `BREVO_API_KEY` (or an `xkeysib-` key in `SMTP_PASS`) is set, otherwise nodemailer SMTP with `SMTP_*`. See `.env.example`. Venue (Fobia vs Action Gates) is chosen by room name. Redirects use the absolute production URL `https://escaperoom-crm.vercel.app`.
 - Coupons: `/api/coupons/validate` checks a code, `/api/coupons/use` consumes it.
 
 ## Conventions
