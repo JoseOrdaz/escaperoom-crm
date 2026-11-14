@@ -282,7 +282,7 @@ export function CheckinPanel({
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {ROLE_LABELS[selected.role] ?? "Empleado"}
-                        {selected.escape ? ` · ${selected.escape}` : ""}
+                        {(selected.escapes?.length ? selected.escapes : selected.escape ? [selected.escape] : []).map((x: string) => ` · ${x}`).join("")}
                       </p>
                       <p
                         className={cn(

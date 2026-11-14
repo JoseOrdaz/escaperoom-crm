@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { requireAccess } from "@/lib/access";
 import { ObjectId } from "mongodb";
 
 /* ───────────────────────────────
    GET → obtener cliente por ID
 ──────────────────────────────── */
 export async function GET(req: NextRequest, context: any) {
+  const auth = await requireAccess(null);
+  if (auth.response) return auth.response;
   try {
     const db = await connectDB();
     const customer = await db
@@ -37,6 +40,8 @@ export async function GET(req: NextRequest, context: any) {
    PUT → actualizar cliente
 ──────────────────────────────── */
 export async function PUT(req: NextRequest, context: any) {
+  const auth = await requireAccess(req, "reservations.edit");
+  if (auth.response) return auth.response;
   try {
     const db = await connectDB();
     const body = await req.json();
@@ -74,6 +79,8 @@ export async function PUT(req: NextRequest, context: any) {
    DELETE → eliminar cliente
 ──────────────────────────────── */
 export async function DELETE(req: NextRequest, context: any) {
+  const auth = await requireAccess(req, "customers.view");
+  if (auth.response) return auth.response;
   try {
     const db = await connectDB();
     const res = await db

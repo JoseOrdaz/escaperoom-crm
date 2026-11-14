@@ -40,6 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { useSession } from "@/components/session-provider";
 import {
   Tabs,
   TabsContent,
@@ -303,6 +304,9 @@ function OverrideEditor({
    Form principal
    ────────────────────────────────────────────────────────────── */
 export function RoomCreateForm() {
+  const { info } = useSession();
+  const myEscapes = info?.escapes ?? [];
+  const [escape, setEscape] = useState<string>("");
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
@@ -480,6 +484,7 @@ export function RoomCreateForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: values.name.trim(),
+          escape: escape || myEscapes[0],
           active: values.active,
           durationMinutes: values.durationMinutes,
           capacityMin: values.capacityMin,
@@ -538,6 +543,20 @@ export function RoomCreateForm() {
               </CardHeader>
               <Separator />
               <CardContent className="grid gap-6 pt-6">
+                {/* Escape al que pertenece */}
+                <div className="grid gap-2 sm:max-w-xs">
+                  <label htmlFor="room-escape" className="text-sm font-medium">Escape</label>
+                  <select
+                    id="room-escape"
+                    value={escape || myEscapes[0] || ""}
+                    onChange={(e) => setEscape(e.target.value)}
+                    className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                  >
+                    {myEscapes.map((e) => <option key={e} value={e}>{e}</option>)}
+                  </select>
+                  <p className="text-xs text-muted-foreground">Solo los empleados de este escape verán la sala y sus reservas.</p>
+                </div>
+
                 {/* Avatar + acciones */}
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16">

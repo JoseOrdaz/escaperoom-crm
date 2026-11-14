@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/form";
 import { SlotPicker, type DayStatus } from "@/components/reservations/slot-picker";
 import { CustomerEmailPanel } from "@/components/reservations/customer-email-panel";
+import { priceFor, describeRule, type PriceRule } from "@/lib/pricing";
+import { useSession } from "@/components/session-provider";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
@@ -44,6 +46,7 @@ type Room = {
   capacityMax: number;
   priceTable: { players: number; price: number }[];
   schedule: {
+    priceRules?: PriceRule[];
     template: WeekTemplate;
     daysOff: { date: string }[];
     overrides: { date: string; slots: TimeSlot[] }[];
@@ -64,6 +67,9 @@ export type ReservationForEdit = {
   status?: "pendiente" | "confirmada" | "cancelada";
   customer?: { id?: string; name?: string; email?: string; phone?: string };
   coupon?: { code: string; type: "percent" | "amount"; value: number };
+  price?: number;
+  priceManual?: boolean;
+  priceNote?: string;
 
 };
 
@@ -104,10 +110,8 @@ function getSlotsForDate(room: Room, date: Date): TimeSlot[] {
   const key = getDayKeyFromDate(date) as keyof WeekTemplate;
   return normSlots(schedule?.template?.[key]);
 }
-function priceForPlayers(room: Room, players?: number) {
-  const target = Number(players ?? 0);
-  const row = room.priceTable?.find((p) => Number(p.players) === target);
-  return row ? Number(row.price) : 0;
+function priceForPlayers(room: Room, players?: number, ymd?: string, hhmm?: string) {
+  return priceFor(room, players, ymd, hhmm).price;
 }
 const eur = (n: number) =>
   new Intl.NumberFormat("es-ES", {
@@ -167,6 +171,10 @@ export default function ReservationModal({
   const [slotOptions, setSlotOptions] = useState<Array<TimeSlot & { reserved?: boolean }>>([]);
   const [sendEmail, setSendEmail] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
+  const { can } = useSession();
+  const [manualPriceOn, setManualPriceOn] = useState(false);
+  const [manualPrice, setManualPrice] = useState("");
+  const [priceNote, setPriceNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -269,6 +277,9 @@ useEffect(() => {
     setSelectedSlot(null);
     setSendEmail(false);
     setEmailMessage("");
+    setManualPriceOn(false);
+    setManualPrice("");
+    setPriceNote("");
     return;
   }
 
@@ -306,6 +317,10 @@ useEffect(() => {
       internalNotes: reservation.internalNotes ?? "",
       status: reservation.status ?? "pendiente",
     });
+
+    setManualPriceOn(!!reservation.priceManual);
+    setManualPrice(reservation.price !== undefined ? String(reservation.price) : "");
+    setPriceNote(reservation.priceNote ?? "");
 
     const start = new Date(reservation.start);
     setSelectedDate(start);
@@ -367,9 +382,12 @@ useEffect(() => {
     );
   }, [selectedRoom, selectedDate, reservationsByDay]);
 
+  const slotStart = selectedSlot?.split("-")[0];
+  const selectedYmd = selectedDate?.toLocaleDateString("sv-SE");
+  const activeRule = selectedRoom ? priceFor(selectedRoom, Number(watchPlayers) || 0, selectedYmd, slotStart).rule : null;
   const computedPrice = useMemo(() => {
   if (!selectedRoom) return 0;
-  const basePrice = priceForPlayers(selectedRoom, Number(watchPlayers) || 0);
+  const basePrice = priceForPlayers(selectedRoom, Number(watchPlayers) || 0, selectedYmd, slotStart);
   if (!selectedCoupon) return basePrice;
 
   // Aplicar descuento
@@ -379,7 +397,7 @@ useEffect(() => {
       : selectedCoupon.value;
 
   return Math.max(basePrice - discount, 0);
-}, [selectedRoom, watchPlayers, selectedCoupon]);
+}, [selectedRoom, watchPlayers, selectedCoupon, selectedYmd, slotStart]);
 
 
   /* === SUBMIT === */
@@ -435,8 +453,18 @@ useEffect(() => {
     ...(sendEmail && emailMessage.trim() ? { emailMessage: emailMessage.trim() } : {}),
   };
 
+  if (mode === "edit" && manualPriceOn && can("reservations.price")) {
+    const n = Number(String(manualPrice).replace(",", "."));
+    if (!Number.isFinite(n) || n < 0) {
+      setLoading(false);
+      return toast.error("Revisa el precio pagado");
+    }
+    body.manualPrice = n;
+    body.priceNote = priceNote.trim();
+  }
+
   if (selectedCoupon) {
-  const basePrice = priceForPlayers(selectedRoom, values.players);
+  const basePrice = priceForPlayers(selectedRoom, values.players, body.date, start);
   const discount =
     selectedCoupon.type === "percent"
       ? basePrice * (selectedCoupon.value / 100)
@@ -450,7 +478,7 @@ useEffect(() => {
   body.price = finalPrice;
 } else {
   // Si no hay cupón, guardamos el precio normal
-  body.price = priceForPlayers(selectedRoom, values.players);
+  body.price = priceForPlayers(selectedRoom, values.players, body.date, start);
 }
 
 
@@ -592,7 +620,8 @@ useEffect(() => {
                         </Select>
 
                         <p className="text-xs text-muted-foreground">
-                          Precio: {eur(computedPrice)} · Capacidad{" "}
+                          Precio: {eur(computedPrice)}
+                          {activeRule && <span className="text-amber-700"> ({describeRule(activeRule)})</span>} · Capacidad{" "}
                           {selectedRoom.capacityMin}–{selectedRoom.capacityMax}
                         </p>
                       </FormItem>
@@ -682,6 +711,42 @@ useEffect(() => {
   );
 })()}
 
+
+                  {mode === "edit" && can("reservations.price") && (
+                    <div className={cn("rounded-xl border p-4", manualPriceOn && "border-amber-300 bg-amber-50/60 dark:bg-amber-500/10")}>
+                      <label className="flex cursor-pointer items-start justify-between gap-4">
+                        <span>
+                          <span className="block text-sm font-medium">Ajustar precio pagado</span>
+                          <span className="block text-xs text-muted-foreground">
+                            Para reflejar lo que pagó realmente el cliente (descuento o cupón aplicado después del juego, etc.).
+                            Precio calculado: <strong>{eur(computedPrice)}</strong>
+                          </span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={manualPriceOn}
+                          onChange={(e) => {
+                            setManualPriceOn(e.target.checked);
+                            if (e.target.checked && !manualPrice) setManualPrice(String(computedPrice));
+                          }}
+                          className="mt-1 size-4 accent-primary"
+                          aria-label="Ajustar precio pagado"
+                        />
+                      </label>
+                      {manualPriceOn && (
+                        <div className="mt-3 grid gap-3 sm:grid-cols-[140px_1fr]">
+                          <div>
+                            <label htmlFor="manual-price" className="text-xs text-muted-foreground">Precio pagado (€)</label>
+                            <Input id="manual-price" inputMode="decimal" value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} className="bg-card" />
+                          </div>
+                          <div>
+                            <label htmlFor="price-note" className="text-xs text-muted-foreground">Motivo (interno)</label>
+                            <Input id="price-note" value={priceNote} onChange={(e) => setPriceNote(e.target.value)} placeholder="Ej.: Cupón HALLOWEEN aplicado en el local" className="bg-card" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-3 border-b pt-2 pb-4"><span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><CalendarDays className="size-4" /></span><div><h3 className="text-sm font-semibold">Fecha y disponibilidad</h3><p className="text-xs text-muted-foreground">Elige una fecha y una hora libre</p></div></div>
                   {/* Calendario + horas */}
@@ -913,7 +978,7 @@ useEffect(() => {
                   
                 />
 
-                {mode === "edit" && reservation?._id && (
+                {mode === "edit" && reservation?._id && can("reservations.notify") && (
                   <CustomerEmailPanel
                     reservationId={reservation._id}
                     customerEmail={selectedCustomer?.email ?? reservation.customer?.email}
@@ -933,7 +998,7 @@ useEffect(() => {
 
         {/* Footer fijo */}
         <DialogFooter className="border-t bg-card px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-  {mode === "edit" && reservation?._id && (
+  {mode === "edit" && reservation?._id && can("reservations.delete") && (
     <Button
       type="button"
       variant="destructive"

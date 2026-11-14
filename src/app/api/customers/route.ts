@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { requireAccess } from "@/lib/access";
 
 /* GET → listado de clientes con número de reservas */
 export async function GET() {
+  const auth = await requireAccess(null);
+  if (auth.response) return auth.response;
   try {
     const db = await connectDB();
 
@@ -41,6 +44,8 @@ export async function GET() {
 
 /* POST → crear nuevo cliente */
 export async function POST(req: Request) {
+  const auth = await requireAccess(req, "reservations.create");
+  if (auth.response) return auth.response;
   try {
     const db = await connectDB();
     const body = await req.json();

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { z } from "zod";
 import { connectDB } from "@/lib/db";
-import { currentProfile, sameOrigin } from "@/lib/profile-session";
+import { canUseRoom, forbiddenRoom, requireAccess } from "@/lib/access";
 import { sendReservationEmail } from "@/lib/reservation-emails";
 
 const bodySchema = z.object({
@@ -13,9 +13,8 @@ const bodySchema = z.object({
 
 /* POST → enviar un mensaje manual al cliente de la reserva */
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
-  if (!sameOrigin(req)) return NextResponse.json({ ok: false, error: "Origen no permitido" }, { status: 403 });
-  const profile = await currentProfile();
-  if (!profile) return NextResponse.json({ ok: false, error: "Inicia sesión de nuevo" }, { status: 401 });
+  const auth = await requireAccess(req, "reservations.notify");
+  if (auth.response) return auth.response;
 
   const { id } = await context.params;
   if (!/^[a-f0-9]{24}$/i.test(id)) return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
@@ -26,6 +25,9 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   }
 
   const db = await connectDB();
+  const target = await db.collection("reservations").findOne({ _id: new ObjectId(id) }, { projection: { roomId: 1 } });
+  if (!target) return NextResponse.json({ ok: false, error: "Reserva no encontrada" }, { status: 404 });
+  if (!(await canUseRoom(db, auth.access, target.roomId))) return forbiddenRoom();
   const result = await sendReservationEmail(db, {
     reservationId: new ObjectId(id),
     kind: "manual",
@@ -34,7 +36,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     subject: parsed.data.subject,
     message: parsed.data.message,
     includeDetails: parsed.data.includeDetails,
-    sentBy: { id: String(profile._id), name: `${profile.name ?? ""} ${profile.surname ?? ""}`.trim() },
+    sentBy: { id: String(auth.access.id), name: auth.access.name },
   });
 
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });

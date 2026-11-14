@@ -3,6 +3,8 @@ import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 import { sendReservationEmail } from "@/lib/reservation-emails";
 import { currentProfile } from "@/lib/profile-session";
+import { priceFor } from "@/lib/pricing";
+import { canUseRoom, forbiddenRoom, requireAccess } from "@/lib/access";
 import { findOrCreateCustomer } from "@/lib/customers";
 
 
@@ -32,6 +34,8 @@ const addMinutes = (d: Date, m: number) => new Date(d.getTime() + m * 60000);
    GET → Obtener una reserva por ID
 ──────────────────────────────── */
 export async function GET(req: NextRequest, context: any) {
+  const auth = await requireAccess(null, "reservations.view");
+  if (auth.response) return auth.response;
   try {
     const { id } = await context.params; // 👈 se debe await
     const _id = safeObjectId(id);
@@ -45,6 +49,7 @@ export async function GET(req: NextRequest, context: any) {
     if (!doc) {
       return NextResponse.json({ ok: false, error: "Reserva no encontrada" }, { status: 404 });
     }
+    if (!(await canUseRoom(db, auth.access, doc.roomId))) return forbiddenRoom();
 
     // Obtener datos del cliente (si existe)
     let customer = null;
@@ -92,6 +97,9 @@ export async function GET(req: NextRequest, context: any) {
    PATCH → Editar una reserva
 ──────────────────────────────── */
 export async function PATCH(req: NextRequest, context: any) {
+  const auth = await requireAccess(req, "reservations.edit");
+  if (auth.response) return auth.response;
+  const access = auth.access;
   try {
     const { id } = await context.params; // 👈 cambio aquí también
     const _id = safeObjectId(id);
@@ -106,6 +114,13 @@ export async function PATCH(req: NextRequest, context: any) {
     if (!roomId) {
       return NextResponse.json({ ok: false, error: "roomId inválido" }, { status: 400 });
     }
+
+    // La reserva y la sala nueva tienen que ser de mis escapes
+    const current = await db
+      .collection("reservations")
+      .findOne({ _id }, { projection: { roomId: 1, price: 1, priceManual: 1, priceNote: 1 } });
+    if (!current) return NextResponse.json({ ok: false, error: "Reserva no encontrada" }, { status: 404 });
+    if (!(await canUseRoom(db, access, current.roomId)) || !(await canUseRoom(db, access, roomId))) return forbiddenRoom();
 
     const room = await db.collection("rooms").findOne({ _id: roomId });
     if (!room) {
@@ -128,7 +143,7 @@ const priceRow = (room.priceTable ?? []).find(
   (r: { players: number; price: number }) =>
     Number(r.players) === Number(body.players)
 );
-let price = Number(priceRow?.price ?? 0);
+let price = priceFor(room as any, body.players, body.date, body.start).price;
 
   // 🧾 Cupón: si es el mismo que ya tenía la reserva se conserva tal cual
   // (sin volver a validar fechas ni sumar otro uso); si cambia, se valida el nuevo.
@@ -162,6 +177,18 @@ let price = Number(priceRow?.price ?? 0);
         ? Math.max(0, price - (price * appliedCoupon.value) / 100)
         : Math.max(0, price - appliedCoupon.value);
   }
+    // 💶 Precio pagado ajustado a mano (p. ej. descuento aplicado después del juego)
+    // Solo quien tiene permiso puede cambiarlo; si no, se respeta el ajuste que ya hubiera
+    const manualPrice = access.can("reservations.price")
+      ? body.manualPrice !== null && body.manualPrice !== undefined && body.manualPrice !== "" && Number.isFinite(Number(body.manualPrice))
+        ? Math.max(0, Number(body.manualPrice))
+        : null
+      : current.priceManual
+        ? Number(current.price ?? 0)
+        : null;
+    if (!access.can("reservations.price") && current.priceManual) body.priceNote = current.priceNote ?? "";
+    if (manualPrice !== null) price = manualPrice;
+
     // Construir update limpio
     const update: any = {
       roomId,
@@ -170,6 +197,8 @@ let price = Number(priceRow?.price ?? 0);
       end,
       players: body.players,
       price,
+      priceManual: manualPrice !== null,
+      priceNote: manualPrice !== null ? String(body.priceNote ?? "").slice(0, 300) : "",
       language: body.language ?? "es",
       notes: body.notes ?? "",
       internalNotes: body.internalNotes ?? "",
@@ -238,7 +267,7 @@ if (body.status !== "cancelada") {
 
     /* ─────────────── Aviso opcional al cliente (desde el modal) ─────────────── */
     let email: { ok: boolean; error?: string } | undefined;
-    if (body.sendEmail) {
+    if (body.sendEmail && access.can("reservations.notify")) {
       const profile = await currentProfile().catch(() => null);
       email = await sendReservationEmail(db, {
         reservationId: _id,
@@ -273,6 +302,8 @@ export async function PUT(req: NextRequest, context: any) {
    DELETE → Eliminar una reserva
 ──────────────────────────────── */
 export async function DELETE(req: NextRequest, context: any) {
+  const auth = await requireAccess(req, "reservations.delete");
+  if (auth.response) return auth.response;
   try {
     const { id } = await context.params; // 👈 await añadido
     const _id = safeObjectId(id);
@@ -281,6 +312,9 @@ export async function DELETE(req: NextRequest, context: any) {
     }
 
     const db = await connectDB();
+    const target = await db.collection("reservations").findOne({ _id }, { projection: { roomId: 1 } });
+    if (!target) return NextResponse.json({ ok: false, error: "Reserva no encontrada" }, { status: 404 });
+    if (!(await canUseRoom(db, auth.access, target.roomId))) return forbiddenRoom();
     const result = await db.collection("reservations").deleteOne({ _id });
 
     if (result.deletedCount === 0) {

@@ -1,8 +1,8 @@
 import { ObjectId, type Db } from "mongodb";
 import { createMailer, type MailOptions } from "@/lib/mailer";
 
-export type EmailTrigger = "auto" | "manual";
-export type EmailEvent = "created" | "updated" | "cancelled" | "manual";
+export type EmailTrigger = "auto" | "manual" | "newsletter";
+export type EmailEvent = "created" | "updated" | "cancelled" | "manual" | "newsletter";
 
 export type EmailMeta = {
   trigger: EmailTrigger;
@@ -14,6 +14,7 @@ export type EmailMeta = {
   sentBy?: { id: string; name: string } | null;
   /** Mensaje escrito a mano (si lo hay), para mostrarlo en el registro */
   message?: string;
+  campaignId?: ObjectId | null;
 };
 
 const toId = (v?: ObjectId | string | null) =>
@@ -36,6 +37,7 @@ export async function sendLoggedEmail(db: Db, meta: EmailMeta, mail: MailOptions
     reservationStart: meta.reservationStart ? new Date(meta.reservationStart) : null,
     sentBy: meta.sentBy ?? null,
     message: meta.message?.trim() || null,
+    campaignId: meta.campaignId ?? null,
     from: mail.from,
     to: addresses(mail.to),
     subject: mail.subject,

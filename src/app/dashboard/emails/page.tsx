@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Eye, Loader2, Mail, RefreshCw, Send, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, Loader2, Mail, Megaphone, RefreshCw, Send, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EVENT_LABEL, type EmailLog } from "@/components/reservations/customer-email-panel";
 import { cn } from "@/lib/utils";
+import { NewsletterPanel } from "./_components/newsletter-panel";
 
 type Row = EmailLog & { roomName?: string | null; reservationStart?: string | null; reservationId?: string | null };
 type Trigger = "auto" | "manual";
@@ -24,6 +25,7 @@ const fmtSession = (iso: string) => {
 const PAGE_SIZE = 50;
 
 export default function EmailsPage() {
+  const [section, setSection] = useState<"reservas" | "newsletter">("reservas");
   const [tab, setTab] = useState<Trigger>("auto");
   const [onlyErrors, setOnlyErrors] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
@@ -84,12 +86,38 @@ export default function EmailsPage() {
       <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Correos</h1>
-          <p className="text-sm text-muted-foreground">Registro de todos los correos enviados a los clientes.</p>
+          <p className="text-sm text-muted-foreground">Correos de reservas, newsletter y avisos a tus clientes.</p>
         </div>
-        <Button variant="outline" onClick={() => load(1)} disabled={loading}>
-          <RefreshCw className={cn("size-4", loading && "animate-spin")} /> Actualizar
-        </Button>
+        {section === "reservas" && (
+          <Button variant="outline" onClick={() => load(1)} disabled={loading}>
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} /> Actualizar
+          </Button>
+        )}
       </div>
+
+      <div role="tablist" aria-label="Sección" className="mb-6 inline-flex rounded-xl bg-muted p-1">
+        {([
+          ["reservas", "Correos de reservas", Mail],
+          ["newsletter", "Newsletter y avisos", Megaphone],
+        ] as const).map(([value, label, Icon]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={section === value}
+            onClick={() => setSection(value)}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              section === value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Icon className="size-4" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {section === "newsletter" ? <NewsletterPanel /> : (
+      <>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         {tabs.map(({ value, label, icon: Icon, hint }) => (
@@ -202,6 +230,9 @@ export default function EmailsPage() {
           )}
         </CardContent>
       </Card>
+
+      </>
+      )}
 
       <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
         <DialogContent className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-2xl">

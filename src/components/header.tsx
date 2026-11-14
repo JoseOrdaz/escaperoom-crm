@@ -7,27 +7,33 @@ import { CalendarDays, CalendarRange, Clock3, DoorOpen, ExternalLink, LogOut, Ma
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useSession } from "@/components/session-provider";
+import type { Permission } from "@/lib/permissions";
 
-const groups = [
+const groups: { label: string; links: { href: string; label: string; icon: typeof CalendarDays; perm?: Permission }[] }[] = [
   { label: "Operativa", links: [
-    { href: "/dashboard/bookings", label: "Reservas", icon: CalendarDays },
-    { href: "/dashboard/reservations", label: "Calendario", icon: CalendarRange },
-    { href: "/dashboard/emails", label: "Correos", icon: Mail },
+    { href: "/dashboard/bookings", label: "Reservas", icon: CalendarDays, perm: "reservations.view" },
+    { href: "/dashboard/reservations", label: "Calendario", icon: CalendarRange, perm: "reservations.view" },
+    { href: "/dashboard/emails", label: "Correos", icon: Mail, perm: "emails.view" },
   ] },
   { label: "Cuenta", links: [{ href: "/dashboard/profile", label: "Mi perfil", icon: UserRound }] },
   { label: "Gestión", links: [
-    { href: "/dashboard/rooms", label: "Salas", icon: DoorOpen },
-    { href: "/dashboard/customers", label: "Clientes", icon: Users },
-    { href: "/dashboard/employees", label: "Empleados", icon: UserRoundCog },
-    { href: "/dashboard/coupons", label: "Cupones", icon: TicketPercent },
+    { href: "/dashboard/rooms", label: "Salas", icon: DoorOpen, perm: "rooms.manage" },
+    { href: "/dashboard/customers", label: "Clientes", icon: Users, perm: "customers.view" },
+    { href: "/dashboard/employees", label: "Empleados", icon: UserRoundCog, perm: "employees.manage" },
+    { href: "/dashboard/coupons", label: "Cupones", icon: TicketPercent, perm: "coupons.manage" },
   ] },
 ];
 
 function Navigation({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { can } = useSession();
+  const visibleGroups = groups
+    .map((g) => ({ ...g, links: g.links.filter((l) => !l.perm || can(l.perm)) }))
+    .filter((g) => g.links.length > 0);
   return (
     <nav aria-label="Navegación principal" className="space-y-8 px-3 py-6">
-      {groups.map((group) => (
+      {visibleGroups.map((group) => (
         <div key={group.label}>
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-[#9298b5]">{group.label}</p>
           <div className="space-y-1">

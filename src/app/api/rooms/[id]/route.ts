@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { normPriceRules } from "@/lib/pricing";
+import { ESCAPES } from "@/lib/permissions";
+import { canUseRoom, forbiddenRoom, requireAccess } from "@/lib/access";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 import { z } from "zod";
@@ -58,9 +61,11 @@ const bodySchema = z
         template: weekTemplate,
         daysOff: z.array(dayOff).default([]),
         overrides: z.array(override).default([]),
+        priceRules: z.array(z.any()).default([]),
       })
       .optional(),
     linkedRooms: z.array(z.string()).optional(),
+    escape: z.enum(ESCAPES).optional(),
   })
   .refine(
     (v) => {
@@ -124,6 +129,7 @@ function normSchedule(s: any) {
           /^\d{4}-\d{2}-\d{2}$/.test(o.date) &&
           o.slots.length > 0
       ),
+    priceRules: normPriceRules(s?.priceRules)
   };
 }
 
@@ -149,11 +155,14 @@ function normPriceTable(pt: any): { players: number; price: number }[] {
 
 /* ─── PATCH → editar sala ─────────────────────────────────── */
 export async function PATCH(req: NextRequest, context: any) {
+  const auth = await requireAccess(req, "rooms.manage");
+  if (auth.response) return auth.response;
   try {
-    const _id = asObjectId(context.params.id);
+    const _id = asObjectId((await context.params).id);
     if (!_id) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
+    if (!(await canUseRoom(await connectDB(), auth.access, _id))) return forbiddenRoom();
 
     const json = await req.json().catch(() => null);
     const parsed = bodySchema.safeParse(json);
@@ -173,6 +182,12 @@ export async function PATCH(req: NextRequest, context: any) {
     if (data.capacityMin !== undefined) $set.capacityMin = data.capacityMin;
     if (data.capacityMax !== undefined) $set.capacityMax = data.capacityMax;
     if (data.imageUrl !== undefined) $set.imageUrl = data.imageUrl ?? "";
+    if (data.escape !== undefined) {
+      if (!auth.access.escapes.includes(data.escape)) {
+        return NextResponse.json({ ok: false, error: "Solo puedes asignar tus escapes" }, { status: 403 });
+      }
+      $set.escape = data.escape;
+    }
 
     if (data.linkedRooms !== undefined) {
       $set.linkedRooms = Array.isArray(data.linkedRooms)
@@ -214,8 +229,12 @@ export async function PATCH(req: NextRequest, context: any) {
 
 /* ─── DELETE → eliminar sala ──────────────────────────────── */
 export async function DELETE(req: NextRequest, context: any) {
+  const auth = await requireAccess(req, "rooms.manage");
+  if (auth.response) return auth.response;
   const db = await connectDB();
-  const _id = new ObjectId(context.params.id);
+  const _id = asObjectId((await context.params).id);
+  if (!_id) return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
+  if (!(await canUseRoom(db, auth.access, _id))) return forbiddenRoom();
 
   // (Opcional) Comprueba reservas vinculadas antes de borrar
   // const reservations = await db.collection("reservations").countDocuments({ roomId: _id });

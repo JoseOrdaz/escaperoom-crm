@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { connectDB } from "@/lib/db";
+import type { ObjectId } from "mongodb";
+import { getAccess, scopedRoomIds } from "@/lib/access";
+import { RoomsCharts, type MonthPoint } from "./_components/rooms-charts";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -49,10 +52,11 @@ function formatEUR(v: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(v || 0);
 }
 
-async function getRooms(): Promise<RoomListItem[]> {
+async function getRooms(roomIds: ObjectId[]): Promise<RoomListItem[]> {
   const db = await connectDB();
 
   const docs = await db.collection("rooms").aggregate([
+    { $match: { _id: { $in: roomIds } } },
     {
       $lookup: {
         from: "reservations",
@@ -63,8 +67,16 @@ async function getRooms(): Promise<RoomListItem[]> {
     },
     {
       $addFields: {
-        reservationsCount: { $size: "$reservations" },
-        revenue: { $sum: "$reservations.price" },
+        // Las canceladas no cuentan ni como reservas ni como facturación
+        activeReservations: {
+          $filter: { input: "$reservations", as: "r", cond: { $ne: ["$$r.status", "cancelada"] } },
+        },
+      },
+    },
+    {
+      $addFields: {
+        reservationsCount: { $size: "$activeReservations" },
+        revenue: { $sum: "$activeReservations.price" },
       },
     },
     {
@@ -100,11 +112,12 @@ async function getRooms(): Promise<RoomListItem[]> {
 }
 
 // ➡️ pedir estadísticas a la API
-async function getStats() {
+async function getStats(roomIds: ObjectId[]) {
   const db = await connectDB();
+  const inScope = { roomId: { $in: roomIds }, status: { $ne: "cancelada" } };
 
   // total histórico
-  const totalReservations = await db.collection("reservations").countDocuments();
+  const totalReservations = await db.collection("reservations").countDocuments(inScope);
 
   // rango mes actual
   const now = new Date();
@@ -112,11 +125,13 @@ async function getStats() {
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const reservationsThisMonth = await db.collection("reservations").countDocuments({
+    ...inScope,
     start: { $gte: start, $lt: end },
   });
 
   // facturación total (sumar campo "price" de todas las reservas)
   const totalRevenueAgg = await db.collection("reservations").aggregate([
+    { $match: inScope },
     { $group: { _id: null, total: { $sum: "$price" } } },
   ]).toArray();
 
@@ -126,17 +141,45 @@ async function getStats() {
 }
 
 
-// ➡️ contar clientes totales
-async function getTotalCustomers(): Promise<number> {
+// ➡️ reservas y facturación de los últimos 6 meses (fechas guardadas como hora de pared en UTC)
+async function getMonthly(roomIds: ObjectId[]): Promise<MonthPoint[]> {
   const db = await connectDB();
-  return db.collection("customers").countDocuments();
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+  const rows = await db.collection("reservations").aggregate([
+    { $match: { roomId: { $in: roomIds }, status: { $ne: "cancelada" }, start: { $gte: start } } },
+    { $group: { _id: { y: { $year: "$start" }, m: { $month: "$start" } }, count: { $sum: 1 }, revenue: { $sum: "$price" } } },
+  ]).toArray();
+  const byKey = new Map(rows.map((r) => [`${r._id.y}-${r._id.m}`, r]));
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1));
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
+    const r = byKey.get(key);
+    return {
+      key,
+      label: d.toLocaleDateString("es-ES", { month: "short", timeZone: "UTC" }).replace(".", ""),
+      count: r?.count ?? 0,
+      revenue: r?.revenue ?? 0,
+    };
+  });
+}
+
+// ➡️ contar clientes totales
+async function getTotalCustomers(roomIds: ObjectId[]): Promise<number> {
+  const db = await connectDB();
+  // Clientes con alguna reserva en las salas de mis escapes
+  const ids = await db.collection("reservations").distinct("customerId", { roomId: { $in: roomIds } });
+  return ids.filter(Boolean).length;
 }
 
 export default async function RoomsPage() {
-  const [rooms, stats, totalCustomers] = await Promise.all([
-    getRooms(),
-    getStats(),
-    getTotalCustomers(),
+  const access = await getAccess();
+  const roomIds = access ? await scopedRoomIds(await connectDB(), access) : [];
+  const [rooms, stats, totalCustomers, monthly] = await Promise.all([
+    getRooms(roomIds),
+    getStats(roomIds),
+    getTotalCustomers(roomIds),
+    getMonthly(roomIds),
   ]);
 
   const totalRevenue = rooms.reduce((a, r) => a + (r.revenue || 0), 0);
@@ -212,6 +255,12 @@ export default async function RoomsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Gráficas */}
+      <RoomsCharts
+        monthly={monthly}
+        byRoom={rooms.map((r) => ({ name: r.name, revenue: r.revenue, count: r.reservationsCount }))}
+      />
 
       {/* Tabla */}
       <Card>

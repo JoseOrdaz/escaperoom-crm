@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { connectDB } from "@/lib/db";
 import { ObjectId } from "mongodb";
 import { RoomEditForm } from "@/app/dashboard/rooms/_components/room-edit-form";
+import { getAccess } from "@/lib/access";
+import { escapeOfRoom } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +15,20 @@ export default async function RoomEditPage({
   // ✅ Esperamos el objeto params antes de usarlo
   const { id } = await params;
 
+  if (!/^[a-f0-9]{24}$/i.test(id)) return notFound();
   const db = await connectDB();
   const room = await db.collection("rooms").findOne({ _id: new ObjectId(id) });
 
   if (!room) return notFound();
+  // Solo administradores de un escape de esta sala
+  const access = await getAccess();
+  if (!access?.can("rooms.manage") || !access.escapes.includes(escapeOfRoom(room))) return notFound();
 
   // ✅ Normaliza valores con fallback seguros
   const normalizedRoom = {
     ...room,
     _id: room._id.toString(),
+    escape: escapeOfRoom(room),
     imageUrl: room.imageUrl ?? "",
     capacityMin: room.capacityMin ?? 2,
     capacityMax: room.capacityMax ?? 6,
@@ -39,18 +46,13 @@ export default async function RoomEditPage({
       },
       daysOff: room.schedule?.daysOff ?? [],
       overrides: room.schedule?.overrides ?? [],
+      priceRules: room.schedule?.priceRules ?? [],
     },
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{normalizedRoom.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          Editar configuración de la sala
-        </p>
-      </div>
-      <RoomEditForm room={normalizedRoom as any} />
+    <div>
+      <RoomEditForm room={normalizedRoom as any} allowedEscapes={access.escapes} />
     </div>
   );
 }

@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { currentProfile, sameOrigin } from "@/lib/profile-session";
+import { PERMISSION_LABEL, can, employeeEscapes, normalizeRole, type Permission } from "@/lib/permissions";
 
 const schema = z.object({ name: z.string().trim().min(1).max(80), surname: z.string().trim().min(1).max(80), email: z.string().trim().email().max(254), username: z.string().trim().min(1).max(80).optional() });
 function present(user: any) {
-  return { name: user.name ?? "", surname: user.surname ?? "", email: user.email ?? "", username: user.username ?? "", avatar: user.avatar ?? "", role: user.role ?? "" };
+  const role = normalizeRole(user.role);
+  return {
+    name: user.name ?? "", surname: user.surname ?? "", email: user.email ?? "", username: user.username ?? "", avatar: user.avatar ?? "", role,
+    escapes: employeeEscapes(user),
+    permissions: (Object.keys(PERMISSION_LABEL) as Permission[]).filter((p) => can(role, p)),
+  };
 }
 export async function GET() {
   const user = await currentProfile();

@@ -37,6 +37,8 @@ type Resv = {
   description?: string;
   status?: "pendiente" | "confirmada" | "cancelada";
   coupon?: { code: string; type: "percent" | "amount"; value: number } | null;
+  priceManual?: boolean;
+  priceNote?: string;
 
 
   
@@ -257,6 +259,9 @@ export function ReservationsCalendar({
     internalNotes: ev.internalNotes ?? "",
     status: ev.status ?? "pendiente",
     coupon: ev.coupon ?? undefined,
+    price: ev.price,
+    priceManual: ev.priceManual,
+    priceNote: ev.priceNote,
     customer: ev.customer
       ? {
           id: ev.customer.id ?? ev.customer.email,

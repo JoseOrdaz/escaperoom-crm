@@ -34,12 +34,12 @@ Next.js 15 App Router + React 19, TypeScript strict, Tailwind v4, shadcn/ui prim
 ### Auth (two cookies — important)
 
 `POST /api/auth/login` sets:
-1. `session_user` — non-httpOnly JSON (`id, name, email, role`). Readable/forgeable by the client; used only for UI (`header.tsx`, `dashboard/layout.tsx`) and coarse routing in root `middleware.ts`.
+1. `session_user` — non-httpOnly JSON (`id, name, email, role`). Readable/forgeable by the client; used only for UI (`header.tsx`, `dashboard/layout.tsx`) and coarse routing in root `middleware.ts` — **note: Next.js only loads middleware from `src/middleware.ts` when using a `src/` dir, so the root file is currently not active**; client layouts redirect to `/login`, but API routes are not protected unless they call `currentProfile()`.
 2. `profile_session` — httpOnly random token, SHA-256 hashed in `profile_sessions` (`src/lib/profile-session.ts`). This is the trustworthy one.
 
 Server-side authorization must use `currentProfile()` (+ `sameOrigin(request)` for mutations), never `session_user`. See the `admin()` helper in `src/app/api/employees/route.ts`. Integration tests explicitly check that forged `session_user` cookies are rejected. Many older routes (reservations, rooms, customers, coupons) do not yet check auth beyond middleware.
 
-Roles: `admin` and `game_master`. Middleware redirects `game_master` to `/dashboard/bookings` unless on an allowed path. Password rules live in `src/lib/password-policy.mjs` (8 chars to 72 bytes, bcrypt limit), shared by API routes and tests.
+Roles, permissions and escapes: `src/lib/permissions.ts` (client-safe) defines the `Permission` list, what a `game_master` may do (view/create/edit reservations, notify customers, check-in), `employeeEscapes()` (employees have `escapes: ("Fobia" | "Action Gates")[]`; legacy `escape` string still read; an admin with none sees all) and `escapeOfRoom()` (room `escape` field, falling back to the room name). Server routes use `requireAccess(req, perm)`, `scopedRoomIds()` and `canUseRoom()` from `src/lib/access.ts` so every list/edit is limited to the user's escapes. Client pages read the session via `useSession()` (`src/components/session-provider.tsx`, filled by `dashboard/layout.tsx` from `GET /api/profile`), which also drives the sidebar and page guards (`canOpenPage`). Anonymous requests: `GET /api/rooms` returns all rooms and `GET /api/reservations?roomId=` returns only busy times (public booking wizard); everything else needs a session.
 
 ### Public booking vs. dashboard
 
@@ -54,6 +54,13 @@ Roles: `admin` and `game_master`. Middleware redirects `game_master` to `/dashbo
 - Dates are built as UTC from `YYYY-MM-DD` + `HH:mm` (`toDateAtLocal`), i.e. wall-clock times stored as UTC — don't apply timezone conversion.
 - Confirmation/cancellation emails are sent from the route handlers through `createMailer()` (`src/lib/mailer.ts`): Brevo HTTP API when `BREVO_API_KEY` (or an `xkeysib-` key in `SMTP_PASS`) is set, otherwise nodemailer SMTP with `SMTP_*`. See `.env.example`. Venue (Fobia vs Action Gates) is chosen by room name. Redirects use the absolute production URL `https://escaperoom-crm.vercel.app`.
 - Coupons: `/api/coupons/validate` checks a code, `/api/coupons/use` consumes it.
+- Prices: always go through `priceFor()` in `src/lib/pricing.ts` (room `priceTable` + optional `schedule.priceRules` per date/time). Editing can override with a manual paid price (`priceManual`, `priceNote`).
+
+### Emails
+
+- Every send goes through `sendLoggedEmail()` (`src/lib/email-log.ts`), which records it in `email_logs` (`trigger`: `auto` | `manual` | `newsletter`). Reservation templates for edit/manual sends live in `src/lib/reservation-emails.ts`; venue branding in `src/lib/venues.ts` (client-safe).
+- Newsletter: `src/lib/newsletter.ts` (recipients, signed unsubscribe links) + `src/lib/newsletter-template.ts` (client-safe, used for live preview). Campaigns are stored in `email_campaigns`; opted-out customers have `newsletterOptOut: true` and must never be sent to.
+- `/dashboard/emails` shows reservation emails (auto/manual) and the newsletter composer/history.
 
 ## Conventions
 

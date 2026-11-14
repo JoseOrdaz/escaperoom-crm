@@ -10,6 +10,7 @@ import confetti from "canvas-confetti";
 
 import { Button } from "@/components/ui/button";
 import { SlotPicker, type DayStatus } from "@/components/reservations/slot-picker";
+import { priceFor } from "@/lib/pricing";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -363,7 +364,9 @@ export default function BookingWizard({
   }
 
   /* ───────── Precio ───────── */
-  const basePrice = selectedRoom?.priceTable.find((p) => p.players === players)?.price ?? 0;
+  // Precio de la tabla + precio especial del día/hora elegidos (si hay)
+  const pricing = priceFor(selectedRoom as any, players, date?.toLocaleDateString("sv-SE"), slot);
+  const basePrice = pricing.price;
   const discount = coupon
     ? coupon.type === "percent"
       ? (basePrice * Number(coupon.value)) / 100
@@ -487,6 +490,11 @@ export default function BookingWizard({
               <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="tabular-nums">{eur(basePrice)}</span></div>
               <div className="flex justify-between text-emerald-600"><span className="flex items-center gap-1"><Ticket className="size-3.5" />{coupon.code}</span><span className="tabular-nums">−{eur(discount)}</span></div>
             </div>
+          ) : null}
+          {pricing.rule && players ? (
+            <p className="mb-2 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-300">
+              {pricing.rule.label?.trim() || "Precio especial"} para esta fecha: {pricing.rule.adjustType === "percent" ? `${pricing.rule.value > 0 ? "+" : ""}${pricing.rule.value} %` : `${pricing.rule.value > 0 ? "+" : ""}${eur(pricing.rule.value)}`}
+            </p>
           ) : null}
           <div className="flex items-baseline justify-between">
             <span className="text-sm font-medium">Total</span>

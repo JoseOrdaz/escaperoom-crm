@@ -21,7 +21,8 @@ test('contraseñas y gestión de empleados requieren permisos y conservan el his
   assert.equal((await request('/api/employees', { method: 'POST', headers: { cookie: 'session_user=%7B%22role%22%3A%22admin%22%7D' }, body: employee })).response.status, 401);
   const created = await request('/api/employees', { method: 'POST', headers: adminHeaders, body: employee });
   assert.equal(created.response.status, 200); const id = created.data._id;
-  const listed = await request('/api/employees'); assert.ok(listed.data.every((item) => !('password' in item)));
+  assert.equal((await request('/api/employees')).response.status, 401);
+  const listed = await request('/api/employees', { headers: adminHeaders }); assert.ok(listed.data.every((item) => !('password' in item)));
   const existingSession = await login('ana-test', 'initial-test-password');
   assert.equal(existingSession.response.status, 200);
   assert.equal((await request('/api/employees', { method: 'PUT', headers: adminHeaders, body: { ...employee, _id: id, name: 'Ana editada', password: 'updated-test-password' } })).response.status, 200);

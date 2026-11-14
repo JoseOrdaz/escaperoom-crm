@@ -3,6 +3,8 @@ import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 import { z } from "zod";
 import { sendLoggedEmail } from "@/lib/email-log";
+import { priceFor } from "@/lib/pricing";
+import { canUseRoom, forbiddenRoom, getAccess, scopedRoomIds } from "@/lib/access";
 import { findOrCreateCustomer } from "@/lib/customers";
 
 
@@ -65,6 +67,7 @@ export async function GET(req: Request) {
 
     // === Estadísticas globales ===
     if (searchParams.get("stats") === "1") {
+      if (!(await getAccess())) return NextResponse.json({ ok: false, error: "Inicia sesión" }, { status: 401 });
       const db = await connectDB();
       const [totalReservations, reservationsThisMonth] = await Promise.all([
         db.collection("reservations").countDocuments(),
@@ -85,9 +88,14 @@ export async function GET(req: Request) {
     const customerId = searchParams.get("customerId");
     if (customerId) {
       const db = await connectDB();
+      const access = await getAccess();
+      if (!access) return NextResponse.json({ ok: false, error: "Inicia sesión" }, { status: 401 });
       const docs = await db
         .collection("reservations")
-        .find({ customerId: safeObjectId(customerId) })
+        .find({
+          customerId: safeObjectId(customerId),
+          ...(access ? { roomId: { $in: await scopedRoomIds(db, access) } } : {}),
+        })
         .project({
           roomId: 1,
           roomName: 1,
@@ -178,6 +186,32 @@ export async function GET(req: Request) {
       query.roomId = { $in: [roomId, ...linked] };
     }
 
+    // 🔐 Con sesión, los listados (sin sala concreta) solo incluyen salas de mis escapes.
+    // La consulta por una sala (disponibilidad) no se recorta para no ocultar salas vinculadas.
+    const access = await getAccess();
+
+    // 🌐 Sin sesión (formulario público): solo horas ocupadas de una sala concreta, sin datos de clientes
+    if (!access) {
+      if (!roomId) return NextResponse.json({ ok: false, error: "Inicia sesión" }, { status: 401 });
+      const busy = await db
+        .collection("reservations")
+        .find({ ...query, status: { $ne: "cancelada" } })
+        .project({ roomId: 1, start: 1, end: 1 })
+        .sort({ start: 1 })
+        .toArray();
+      return NextResponse.json(
+        busy.map((d: any) => ({ roomId: String(d.roomId), start: d.start.toISOString(), end: d.end.toISOString() }))
+      );
+    }
+
+    if (!roomId) {
+      const allowed = await scopedRoomIds(db, access);
+      const allowedSet = new Set(allowed.map(String));
+      query.roomId = query.roomId?.$in
+        ? { $in: (query.roomId.$in as ObjectId[]).filter((id) => allowedSet.has(String(id))) }
+        : { $in: allowed };
+    }
+
     // 🔥 consultas paralelas sin caché
     const docs = await db
       .collection("reservations")
@@ -194,6 +228,8 @@ export async function GET(req: Request) {
         status: 1,
         customerId: 1,
         coupon: 1,
+        priceManual: 1,
+        priceNote: 1,
       })
       .sort({ start: 1 })
       .toArray();
@@ -245,6 +281,8 @@ export async function GET(req: Request) {
         end: d.end.toISOString(),
         players: d.players,
         price: d.price ?? 0,
+        priceManual: !!d.priceManual,
+        priceNote: d.priceNote ?? "",
         language: d.language ?? "es",
         notes: d.notes ?? "",
         internalNotes: d.internalNotes ?? "",
@@ -293,6 +331,9 @@ export async function POST(req: Request) {
     const db = await connectDB();
 
     const roomId = safeObjectId(v.roomId);
+    // Personal con sesión: solo en salas de sus escapes (la reserva pública no tiene sesión)
+    const access = await getAccess();
+    if (access && (!access.can("reservations.create") || !(await canUseRoom(db, access, roomId)))) return forbiddenRoom();
     if (!roomId)
       return NextResponse.json({ ok: false, error: "roomId inválido" }, { status: 400 });
 
@@ -320,7 +361,8 @@ export async function POST(req: Request) {
     const priceRow = (room.priceTable ?? []).find(
       (r: any) => Number(r.players) === Number(v.players)
     );
-    let price = Number(priceRow?.price ?? 0);
+    // Precio de la tabla + regla especial del día/hora (si la hay)
+    let price = priceFor(room as any, v.players, v.date, v.start).price;
 
     // 💸 Aplicar descuento si hay cupón
     // 💸 Aplicar descuento si hay cupón válido en BD

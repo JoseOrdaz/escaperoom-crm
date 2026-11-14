@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { currentProfile, sameOrigin } from "@/lib/profile-session";
 import { passwordError } from "@/lib/password-policy.mjs";
+import { ESCAPES, employeeEscapes, isEscape, type Escape } from "@/lib/permissions";
 
 const fields = z.object({
   name: z.string().trim().min(1).max(80),
@@ -12,7 +13,8 @@ const fields = z.object({
   email: z.string().trim().email().max(254),
   username: z.string().trim().max(80).optional(),
   role: z.enum(["admin", "game_master"]),
-  escape: z.string().trim().max(100).optional(),
+  escape: z.string().trim().max(100).optional(), // formato antiguo (un solo escape)
+  escapes: z.array(z.enum(ESCAPES)).optional(),
   password: z.string().optional(),
 });
 async function admin(request: Request) {
@@ -20,13 +22,32 @@ async function admin(request: Request) {
   const user = await currentProfile();
   if (!user) return { error: "Inicia sesión de nuevo", status: 401 };
   if (user.role !== "admin") return { error: "Se requieren permisos de administrador", status: 403 };
-  return { user };
+  return { user, escapes: employeeEscapes(user) };
 }
 
+/** Escapes del formulario: lista nueva o, si no viene, el campo antiguo */
+function pickEscapes(data: { escapes?: Escape[]; escape?: string }) {
+  const list = data.escapes?.length ? data.escapes : isEscape(data.escape) ? [data.escape] : [];
+  return [...new Set(list)] as Escape[];
+}
+function checkEscapes(escapes: Escape[], allowed: Escape[]) {
+  if (escapes.length === 0) return "Asigna al menos un escape";
+  if (!escapes.every((e) => allowed.includes(e))) return "Solo puedes asignar los escapes que tienes asociados";
+  return null;
+}
+
+/* GET → empleados de los escapes del usuario (sin contraseñas) */
 export async function GET() {
+  const user = await currentProfile();
+  if (!user) return NextResponse.json({ error: "Inicia sesión de nuevo" }, { status: 401 });
+  const mine = employeeEscapes(user);
   const db = await connectDB();
   const employees = await db.collection("employees").find({ deletedAt: { $exists: false } }).project({ password: 0 }).toArray();
-  return NextResponse.json(employees);
+  return NextResponse.json(
+    employees
+      .map((e) => ({ ...e, escapes: employeeEscapes(e) }))
+      .filter((e) => e.escapes.some((x) => mine.includes(x)))
+  );
 }
 
 export async function POST(req: Request) {
@@ -36,12 +57,16 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Revisa los datos del empleado" }, { status: 400 });
   const error = passwordError(parsed.data.password);
   if (error) return NextResponse.json({ error }, { status: 400 });
-  const { password, ...data } = parsed.data;
+  const { password, name, surname, email: rawEmail, username: rawUsername, role } = parsed.data;
+  const data = { name, surname, email: rawEmail, username: rawUsername, role };
+  const escapes = pickEscapes(parsed.data);
+  const escapeError = checkEscapes(escapes, auth.escapes!);
+  if (escapeError) return NextResponse.json({ error: escapeError }, { status: 400 });
   const email = data.email.toLowerCase();
   const username = data.username || email.split("@")[0];
   const db = await connectDB();
   if (await db.collection("employees").findOne({ deletedAt: { $exists: false }, $or: [{ email }, { username }] })) return NextResponse.json({ error: "El correo o el usuario ya están en uso" }, { status: 409 });
-  const newEmp = { ...data, email, username, password: await bcrypt.hash(password!, 10), avatar: "", weeklySchedule: {}, checkins: [], createdAt: new Date() };
+  const newEmp = { ...data, escapes, escape: escapes[0], email, username, password: await bcrypt.hash(password!, 10), avatar: "", weeklySchedule: {}, checkins: [], createdAt: new Date() };
   const result = await db.collection("employees").insertOne(newEmp);
   return NextResponse.json({ ok: true, _id: result.insertedId });
 }
@@ -53,18 +78,24 @@ export async function PUT(req: Request) {
   if (!ObjectId.isValid(body?._id)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
   const parsed = fields.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Revisa los datos del empleado" }, { status: 400 });
-  const { password, ...data } = parsed.data;
+  const { password, name, surname, email: rawEmail, username: rawUsername, role } = parsed.data;
+  const data = { name, surname, email: rawEmail, username: rawUsername, role };
   if (password) { const error = passwordError(password); if (error) return NextResponse.json({ error }, { status: 400 }); }
+  const escapes = pickEscapes(parsed.data);
+  const escapeError = checkEscapes(escapes, auth.escapes!);
+  if (escapeError) return NextResponse.json({ error: escapeError }, { status: 400 });
   const db = await connectDB();
   const id = new ObjectId(body._id);
   const employee = await db.collection("employees").findOne({ _id: id, deletedAt: { $exists: false } });
   if (!employee) return NextResponse.json({ error: "Empleado no encontrado" }, { status: 404 });
+  if (!employeeEscapes(employee).some((e) => auth.escapes!.includes(e))) return NextResponse.json({ error: "Este empleado no pertenece a tus escapes" }, { status: 403 });
   if (employee.role === "admin" && data.role !== "admin" && await db.collection("employees").countDocuments({ role: "admin", deletedAt: { $exists: false } }) <= 1) return NextResponse.json({ error: "Debe quedar al menos un administrador" }, { status: 409 });
   const email = data.email.toLowerCase();
   const username = data.username || email.split("@")[0];
   if (await db.collection("employees").findOne({ _id: { $ne: id }, deletedAt: { $exists: false }, $or: [{ email }, { username }] })) return NextResponse.json({ error: "El correo o el usuario ya están en uso" }, { status: 409 });
-  await db.collection("employees").updateOne({ _id: id }, { $set: { ...data, email, username, updatedAt: new Date(), ...(password ? { password: await bcrypt.hash(password, 10) } : {}) } });
+  await db.collection("employees").updateOne({ _id: id }, { $set: { ...data, escapes, escape: escapes[0], email, username, updatedAt: new Date(), ...(password ? { password: await bcrypt.hash(password, 10) } : {}) } });
   if (password || employee.role !== data.role) await db.collection("profile_sessions").deleteMany({ employeeId: id });
+  // Los escapes se leen de la ficha en cada petición: no hace falta cerrar sesión al cambiarlos
   const reauthRequired = String(auth.user!._id) === String(id) && Boolean(password || employee.role !== data.role);
   return NextResponse.json({ ok: true, reauthRequired });
 }
@@ -79,6 +110,7 @@ export async function DELETE(req: Request) {
   const db = await connectDB();
   const employee = await db.collection("employees").findOne({ _id: objectId, deletedAt: { $exists: false } });
   if (!employee) return NextResponse.json({ error: "Empleado no encontrado" }, { status: 404 });
+  if (!employeeEscapes(employee).some((e) => auth.escapes!.includes(e))) return NextResponse.json({ error: "Este empleado no pertenece a tus escapes" }, { status: 403 });
   if (employee.role === "admin" && await db.collection("employees").countDocuments({ role: "admin", deletedAt: { $exists: false } }) <= 1) return NextResponse.json({ error: "Debe quedar al menos un administrador" }, { status: 409 });
   await db.collection("employees").updateOne({ _id: objectId }, { $set: { deletedAt: new Date(), updatedAt: new Date() } });
   await db.collection("profile_sessions").deleteMany({ employeeId: objectId });

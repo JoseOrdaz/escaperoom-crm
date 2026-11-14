@@ -37,6 +37,8 @@ type Resv = {
   end: string;
   players: number;
   price: number;
+  priceManual?: boolean;
+  priceNote?: string;
   language: "es" | "en" | "ru";
   customer?: { id?: string; name?: string; email?: string; phone?: string };
   // description?: string;
@@ -175,6 +177,9 @@ export default function ReservationsTable() {
       internalNotes: r.internalNotes,
       status: r.status ?? "pendiente",
       coupon: r.coupon ?? undefined,
+      price: r.price,
+      priceManual: r.priceManual,
+      priceNote: r.priceNote,
       customer: r.customer
         ? {
           id: r.customer.id,

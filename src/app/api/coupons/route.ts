@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { ObjectId } from "mongodb";
+import { requireAccess } from "@/lib/access";
 
 /* ========= Crear cupón ========= */
 export async function POST(req: NextRequest) {
+  const auth = await requireAccess(req, "coupons.manage");
+  if (auth.response) return auth.response;
   try {
     const body = await req.json();
     const db = await connectDB();

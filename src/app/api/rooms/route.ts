@@ -1,5 +1,8 @@
 // src/app/api/rooms/route.ts
 import { NextResponse } from "next/server";
+import { normPriceRules } from "@/lib/pricing";
+import { ESCAPES, escapeOfRoom } from "@/lib/permissions";
+import { getAccess, requireAccess } from "@/lib/access";
 import { connectDB } from "@/lib/db";
 import { z } from "zod";
 
@@ -40,6 +43,7 @@ const imageUrlSchema = z.string().optional().transform(v => (typeof v === "strin
   });
 
 const bodySchema = z.object({
+  escape: z.enum(ESCAPES).optional(),
   name: z.string().min(1).max(60),
   active: z.coerce.boolean().default(true),
   durationMinutes: z.coerce.number().int().min(30).max(180),
@@ -51,10 +55,12 @@ const bodySchema = z.object({
     template: weekTemplate,
     daysOff: z.array(dayOff).default([]),
     overrides: z.array(override).default([]),
+        priceRules: z.array(z.any()).default([]),
   }).default({
     template: { monday:[], tuesday:[], wednesday:[], thursday:[], friday:[], saturday:[], sunday:[] },
     daysOff: [],
     overrides: [],
+    priceRules: [],
   }),
 }).refine(v => v.capacityMin <= v.capacityMax, { path: ["capacityMin"], message: "El mínimo no puede ser mayor que el máximo" });
 
@@ -86,6 +92,7 @@ function normSchedule(s: any) {
     overrides: overrides
       .map((o: any) => ({ date: o?.date, slots: normSlots(o?.slots) }))
       .filter((o: any) => typeof o.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && o.slots.length > 0),
+    priceRules: normPriceRules(s?.priceRules)
   };
 }
 function normPriceTable(pt: any) {
@@ -103,6 +110,8 @@ function normPriceTable(pt: any) {
 
 /* ── POST /api/rooms ───────────────────────────────────────── */
 export async function POST(req: Request) {
+  const auth = await requireAccess(req, "rooms.manage");
+  if (auth.response) return auth.response;
   try {
     const json = await req.json();
     const parsed = bodySchema.safeParse(json);
@@ -114,10 +123,15 @@ export async function POST(req: Request) {
     }
 
     const v = parsed.data;
+    const escape = v.escape ?? escapeOfRoom({ name: v.name });
+    if (!auth.access.escapes.includes(escape)) {
+      return NextResponse.json({ ok: false, error: "Solo puedes crear salas en tus escapes" }, { status: 403 });
+    }
     const db = await connectDB();
 
     const doc = {
       name: v.name.trim(),
+      escape,
       active: !!v.active,
       durationMinutes: v.durationMinutes,
       capacityMin: v.capacityMin,
@@ -145,6 +159,8 @@ export async function POST(req: Request) {
 ----------------------------------------------------------------*/
 export async function GET() {
   try {
+    // Con sesión: solo las salas de los escapes del usuario. Sin sesión (reserva pública): todas.
+    const access = await getAccess();
     const db = await connectDB();
     const docs = await db.collection("rooms")
       .find({ active: { $ne: false } }, {
@@ -157,14 +173,18 @@ export async function GET() {
           imageUrl: 1,
           priceTable: 1,
           schedule: 1,
+          escape: 1,
         }
       })
       .sort({ name: 1 })
       .toArray();
 
-    const result = docs.map((d: any) => ({
+    const result = docs
+      .filter((d: any) => !access || access.escapes.includes(escapeOfRoom(d)))
+      .map((d: any) => ({
       _id: d._id.toString(),
       name: d.name,
+      escape: escapeOfRoom(d),
       imageUrl: typeof d.imageUrl === "string" ? d.imageUrl : "",
       durationMinutes: Number(d.durationMinutes) || 60,
       capacityMin: Number(d.capacityMin) || 1,

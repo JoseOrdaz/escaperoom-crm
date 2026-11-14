@@ -43,6 +43,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { usePathname, useSearchParams } from "next/navigation";
 import { CheckinPanel } from "./_components/checkin-panel";
+import { ESCAPES } from "@/lib/permissions";
 
 
 
@@ -55,11 +56,13 @@ export default function EmployeesPage() {
     username: "",
     password: "",
     role: "",
-    escape: "Fobia",
+    escapes: ["Fobia"] as string[],
   };
 
   const [employees, setEmployees] = useState<any[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [myEscapes, setMyEscapes] = useState<string[]>([...ESCAPES]);
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<string | null>(null);
@@ -163,7 +166,17 @@ export default function EmployeesPage() {
   /* ───── Hooks ───── */
   useEffect(() => {
     loadEmployees();
-    fetch("/api/profile", { cache: "no-store" }).then((res) => res.ok ? res.json() : null).then((user) => setIsAdmin(user?.role === "admin")).catch(() => setIsAdmin(false));
+    fetch("/api/profile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => {
+        setIsAdmin(user?.role === "admin");
+        if (Array.isArray(user?.escapes) && user.escapes.length) {
+          setMyEscapes(user.escapes);
+          setEscapeFilter((f) => (user.escapes.includes(f) ? f : user.escapes[0]));
+        }
+      })
+      .catch(() => setIsAdmin(false))
+      .finally(() => setProfileLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -192,6 +205,11 @@ useEffect(() => {
   return () => window.removeEventListener("hashchange", handleHashChange);
 }, []);
 
+// Los game masters solo ven Calendario y Fichaje
+useEffect(() => {
+  if (profileLoaded && !isAdmin && (tabValue === "list" || tabValue === "history")) setTabValue("checkin");
+}, [profileLoaded, isAdmin, tabValue]);
+
 // Sincroniza el hash al cambiar de pestaña manualmente
 useEffect(() => {
   if (tabValue) {
@@ -216,19 +234,19 @@ useEffect(() => {
 
     <div className="space-y-6">
       <Tabs value={tabValue} onValueChange={setTabValue}>
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-white p-1.5 sm:grid-cols-4">
-          <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="list">
+        <TabsList className={`grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-white p-1.5 ${isAdmin ? "sm:grid-cols-4" : ""}`}>
+          {isAdmin && <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="list">
             <Users className="w-4 h-4 mr-1" /> Empleados
-          </TabsTrigger>
+          </TabsTrigger>}
           <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="calendar">
             <CalendarDays className="w-4 h-4 mr-1" /> Calendario
           </TabsTrigger>
           <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="checkin">
             <Clock3 className="w-4 h-4 mr-1" /> Fichaje
           </TabsTrigger>
-          <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="history">
+          {isAdmin && <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="history">
             <ClipboardList className="w-4 h-4 mr-1" /> Registro
-          </TabsTrigger>
+          </TabsTrigger>}
         </TabsList>
 
         {/* ───── LISTA DE EMPLEADOS ───── */}
@@ -322,18 +340,30 @@ useEffect(() => {
     </SelectContent>
   </Select>
 
-  </div><div className="space-y-2"><Label htmlFor="employee-escape">Escape asociado</Label><Select
-    value={form.escape}
-    onValueChange={(v) => setForm({ ...form, escape: v })}
-  >
-    <SelectTrigger id="employee-escape" className="w-full">
-      <SelectValue placeholder="Escape asociado" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="Fobia">Fobia</SelectItem>
-      <SelectItem value="Action Gates">Action Gates</SelectItem>
-    </SelectContent>
-  </Select>
+  </div><div className="space-y-2"><Label>Escapes asociados</Label>
+    <div className="flex flex-wrap gap-2">
+      {ESCAPES.map((esc) => {
+        const checked = (form.escapes ?? []).includes(esc);
+        const allowed = myEscapes.includes(esc);
+        return (
+          <label key={esc} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm ${checked ? "border-primary bg-primary/5" : ""} ${allowed ? "" : "cursor-not-allowed opacity-50"}`}>
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              disabled={!allowed}
+              checked={checked}
+              onChange={(e) => {
+                const current = new Set(form.escapes ?? []);
+                if (e.target.checked) current.add(esc); else current.delete(esc);
+                setForm({ ...form, escapes: ESCAPES.filter((x) => current.has(x)) });
+              }}
+            />
+            {esc}
+          </label>
+        );
+      })}
+    </div>
+    <p className="text-xs text-muted-foreground">Verá las salas y reservas de estos escapes.</p>
 
   </div><DialogFooter className="flex justify-end gap-2 mt-3">
     <Button
@@ -365,8 +395,8 @@ useEffect(() => {
               <div key={emp._id} className="flex flex-wrap items-center gap-4 p-4 sm:px-5">
                 <div className="relative"><Avatar className="size-11"><AvatarImage src={emp.avatar || "/avatar-default.png"} /><AvatarFallback className="bg-primary/10 font-medium text-primary">{emp.name?.[0]}{emp.surname?.[0]}</AvatarFallback></Avatar>{active.some((r) => String(r.employeeId) === String(emp._id)) && <span title="En turno" className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-card bg-emerald-500" />}</div>
                 <div className="min-w-0 flex-1"><p className="font-semibold">{emp.name} {emp.surname}</p><p className="mt-1 break-all text-sm text-muted-foreground">{emp.email}</p></div>
-                <div className="flex w-full flex-wrap items-center gap-2 pl-[60px] sm:w-60 sm:pl-0"><span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${emp.role === "admin" ? "bg-primary/10 text-primary" : "bg-sky-500/10 text-sky-700"}`}>{emp.role === "admin" ? "Administrador" : emp.role === "game_master" ? "Game Master" : emp.role}</span><span className="flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"><Building2 className="size-3" />{emp.escape || "Sin escape"}</span></div>
-                {isAdmin && <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => { setEditing(emp._id); setForm({ ...emp, password: "" }); setOpenModal(true); }}><Pencil className="size-4" />Editar</Button><Button size="sm" variant="outline" className="text-destructive" onClick={() => deleteEmployee(emp)}><Trash2 className="size-4" />Eliminar</Button></div>}
+                <div className="flex w-full flex-wrap items-center gap-2 pl-[60px] sm:w-60 sm:pl-0"><span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${emp.role === "admin" ? "bg-primary/10 text-primary" : "bg-sky-500/10 text-sky-700"}`}>{emp.role === "admin" ? "Administrador" : emp.role === "game_master" ? "Game Master" : emp.role}</span>{(emp.escapes?.length ? emp.escapes : ["Sin escape"]).map((esc: string) => <span key={esc} className="flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground"><Building2 className="size-3" />{esc}</span>)}</div>
+                {isAdmin && <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => { setEditing(emp._id); setForm({ ...emptyForm, ...emp, escapes: emp.escapes ?? (emp.escape ? [emp.escape] : []), password: "" }); setOpenModal(true); }}><Pencil className="size-4" />Editar</Button><Button size="sm" variant="outline" className="text-destructive" onClick={() => deleteEmployee(emp)}><Trash2 className="size-4" />Eliminar</Button></div>}
               </div>
             ))}
           </div>
@@ -387,8 +417,7 @@ useEffect(() => {
                   <SelectValue placeholder="Selecciona escape" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Fobia">Fobia</SelectItem>
-                  <SelectItem value="Action Gates">Action Gates</SelectItem>
+                  {myEscapes.map((esc) => <SelectItem key={esc} value={esc}>{esc}</SelectItem>)}
                 </SelectContent>
               </Select>
             </CardHeader>
@@ -519,7 +548,7 @@ useEffect(() => {
                   </SelectTrigger>
                   <SelectContent>
                     {employees
-                      .filter((e) => e.escape === escapeFilter)
+                      .filter((e) => (e.escapes ?? [e.escape]).includes(escapeFilter))
                       .map((e) => (
                         <SelectItem key={e._id} value={e._id}>
                           {e.name} {e.surname}
