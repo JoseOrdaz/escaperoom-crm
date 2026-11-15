@@ -17,7 +17,6 @@ const groups: { label: string; links: { href: string; label: string; icon: typeo
     { href: "/dashboard/reservations", label: "Calendario", icon: CalendarRange, perm: "reservations.view" },
     { href: "/dashboard/emails", label: "Correos", icon: Mail, perm: "emails.view" },
   ] },
-  { label: "Cuenta", links: [{ href: "/dashboard/profile", label: "Mi perfil", icon: UserRound }] },
   { label: "Gestión", links: [
     { href: "/dashboard/rooms", label: "Salas", icon: DoorOpen, perm: "rooms.manage" },
     { href: "/dashboard/customers", label: "Clientes", icon: Users, perm: "customers.view" },
@@ -55,7 +54,48 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function Brand() {
-  return <Link href="/dashboard/bookings" className="flex items-center gap-3 px-6 py-6 text-white"><span className="flex size-9 items-center justify-center rounded-lg bg-[#8067e8] text-white"><DoorOpen className="size-5" aria-hidden="true" /></span><span><span className="block text-sm font-semibold tracking-tight">Escape CRM</span><span className="block text-xs text-[#b8bdd2]">Panel de gestión</span></span></Link>;
+  return (
+    <Link href="/dashboard" className="block px-5 pb-4 pt-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" aria-label="Fobia Escape Rooms y Action Gates · Inicio">
+      <span className="flex items-center justify-center gap-4">
+        <img src="/brand/fobia.png" alt="Fobia Escape Rooms" className="h-auto w-[42%] max-w-[92px] object-contain" />
+        <span className="h-9 w-px shrink-0 bg-white/20" aria-hidden="true" />
+        <img src="/brand/action-gates.svg" alt="Action Gates" className="h-auto w-[42%] max-w-[88px] object-contain" />
+      </span>
+      <span className="mt-3 block text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9298b5]">Panel de gestión</span>
+    </Link>
+  );
+}
+
+const roleLabel = (role?: string) => (role === "admin" ? "Administrador" : role === "game_master" ? "Game master" : role || "Sesión activa");
+
+/** Pie del menú: usuario (abre Mi perfil) + cerrar sesión */
+function UserFooter({ user, onLogout, onNavigate }: { user: { name?: string; role?: string; avatar?: string } | null; onLogout: () => void; onNavigate?: () => void }) {
+  const pathname = usePathname();
+  const active = pathname.startsWith("/dashboard/profile");
+  return (
+    <div className="border-t border-white/10 p-3">
+      <Link
+        href="/dashboard/profile"
+        onClick={onNavigate}
+        aria-current={active ? "page" : undefined}
+        className={`flex items-center gap-3 rounded-lg p-2 transition-colors focus-visible:outline-2 focus-visible:outline-primary ${active ? "bg-white/12" : "hover:bg-white/8"}`}
+        title="Mi perfil"
+      >
+        <Avatar className="size-9 ring-2 ring-white/15">
+          <AvatarImage src={user?.avatar || undefined} alt="" />
+          <AvatarFallback className="bg-[#8067e8] text-xs font-semibold text-white">{user?.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
+        </Avatar>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-white">{user?.name || "Usuario"}</span>
+          <span className="block truncate text-xs text-[#b8bdd2]">{roleLabel(user?.role)} · Mi perfil</span>
+        </span>
+        <UserRound className="size-4 shrink-0 text-[#9298b5]" aria-hidden="true" />
+      </Link>
+      <Button variant="ghost" size="sm" onClick={onLogout} className="mt-1 w-full justify-start text-[#b8bdd2] hover:bg-white/10 hover:text-white">
+        <LogOut className="mr-2 size-4" />Cerrar sesión
+      </Button>
+    </div>
+  );
 }
 
 export function DashboardHeader() {
@@ -84,11 +124,11 @@ export function DashboardHeader() {
   return <>
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col bg-[#20243c] text-white lg:flex">
       <Brand /><div className="border-t border-white/10" /><div className="flex-1 overflow-y-auto"><Navigation /></div>
-      <div className="border-t border-white/10 p-4"><p className="truncate text-sm font-medium">{user?.name || "Usuario"}</p><p className="mt-1 text-xs text-[#b8bdd2]">{user?.role === "admin" ? "Administrador" : user?.role === "game_master" ? "Game master" : user?.role || "Sesión activa"}</p><Button variant="ghost" size="sm" onClick={logout} className="mt-3 w-full justify-start text-[#b8bdd2] hover:bg-white/10 hover:text-white"><LogOut className="mr-2 size-4" />Cerrar sesión</Button></div>
+      <UserFooter user={user} onLogout={logout} />
     </aside>
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b bg-white/95 px-4 sm:px-6 lg:px-8">
-      <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menú"><Menu className="size-5" /></Button></SheetTrigger><SheetContent side="left" className="w-72 gap-0 border-0 bg-[#20243c] p-0 text-white"><SheetTitle className="sr-only">Navegación principal</SheetTitle><Brand /><div className="border-t border-white/10" /><div className="overflow-y-auto"><Navigation onNavigate={() => setOpen(false)} /></div><div className="mt-auto border-t p-4"><Button variant="ghost" onClick={logout} className="w-full justify-start"><LogOut className="mr-2 size-4" />Cerrar sesión</Button></div></SheetContent></Sheet>
-      <div className="min-w-0"><p className="text-xs text-muted-foreground">Espacio de trabajo</p><p className="truncate text-sm font-semibold">{current?.label || "Gestión"}</p></div>
+      <Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menú"><Menu className="size-5" /></Button></SheetTrigger><SheetContent side="left" className="w-72 gap-0 border-0 bg-[#20243c] p-0 text-white"><SheetTitle className="sr-only">Navegación principal</SheetTitle><Brand /><div className="border-t border-white/10" /><div className="overflow-y-auto"><Navigation onNavigate={() => setOpen(false)} /></div><div className="mt-auto"><UserFooter user={user} onLogout={logout} onNavigate={() => setOpen(false)} /></div></SheetContent></Sheet>
+      <div className="min-w-0"><p className="text-xs text-muted-foreground">Espacio de trabajo</p><p className="truncate text-sm font-semibold">{current?.label || (pathname.startsWith("/dashboard/profile") ? "Mi perfil" : "Gestión")}</p></div>
       <Link href="/dashboard/profile" className="ml-auto flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-primary" aria-label="Abrir mi perfil"><div className="hidden text-right sm:block"><p className="text-sm font-medium">{user?.name || "Usuario"}</p><p className="text-xs text-muted-foreground">{user?.role === "admin" ? "Administrador" : user?.role === "game_master" ? "Game master" : user?.role || ""}</p></div><Avatar className="size-9"><AvatarImage src={user?.avatar || undefined} alt="" /><AvatarFallback className="bg-primary/10 text-xs text-primary">{user?.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback></Avatar></Link>
     </header>
   </>;
