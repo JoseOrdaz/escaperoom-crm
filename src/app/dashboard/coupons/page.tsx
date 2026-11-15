@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 type Coupon = {
   _id: string; code: string; type: "percent" | "amount"; value: number; roomId?: string | null;
   startDate: string; endDate: string; maxUses: number; usedCount?: number; active?: boolean;
+  /** Importado de la plataforma anterior */
+  legacy?: boolean;
 };
 type Usage = Record<string, { rooms: { roomId: string; name: string; uses: number; cancelled: number; revenue: number }[]; uses: number; revenue: number; last: string | null }>;
 type Room = { _id: string; name: string };
@@ -190,6 +192,7 @@ export default function CouponsPage() {
                         <p className="flex flex-wrap items-center gap-2">
                           <span className="font-mono font-semibold tracking-wide">{c.code}</span>
                           <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", st.tone)}><span className={cn("size-1.5 rounded-full", st.dot)} />{st.label}</span>
+                          {c.legacy && <span className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground" title="Importado con las reservas de la plataforma anterior">Plataforma anterior</span>}
                         </p>
                         <p className="mt-1 text-sm text-muted-foreground">
                           <strong className="text-foreground">{c.type === "percent" ? `${c.value} %` : eur(c.value)}</strong> de descuento ·{" "}
