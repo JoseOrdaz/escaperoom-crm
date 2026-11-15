@@ -14,8 +14,9 @@ import {
 import {
   Form, FormField, FormItem, FormLabel, FormControl, FormDescription,
 } from "@/components/ui/form";
-import { SlotPicker, type DayStatus } from "@/components/reservations/slot-picker";
+import { SlotPicker, type DayStatus, type SlotBooking, type SlotOption } from "@/components/reservations/slot-picker";
 import { CustomerEmailPanel } from "@/components/reservations/customer-email-panel";
+import { useDayBookings } from "@/components/reservations/use-day-bookings";
 import { priceFor, describeRule, type PriceRule } from "@/lib/pricing";
 import { useSession } from "@/components/session-provider";
 import { z } from "zod";
@@ -168,7 +169,7 @@ export default function ReservationModal({
   const [reservations, setReservations] = useState<ReservationForEdit[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [slotOptions, setSlotOptions] = useState<Array<TimeSlot & { reserved?: boolean }>>([]);
+  const [slotOptions, setSlotOptions] = useState<SlotOption[]>([]);
   const [sendEmail, setSendEmail] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
   const { can } = useSession();
@@ -337,7 +338,7 @@ useEffect(() => {
 
 
   const reservationsByDay = useMemo(() => {
-    const map: Record<string, { start: string; end: string }[]> = {};
+    const map: Record<string, SlotBooking[]> = {};
     reservations
       .filter((r) => !(mode === "edit" && reservation?._id && String(r._id) === String(reservation._id)))
       .forEach((r) => {
@@ -346,10 +347,27 @@ useEffect(() => {
       const start = hhmmFromISO(r.start);
       const end = hhmmFromISO(r.end);
       if (!map[day]) map[day] = [];
-      map[day].push({ start, end });
+      const extra = r as unknown as {
+        roomName?: string; roomId?: string; customer?: { name?: string; email?: string; phone?: string };
+        status?: string; players?: number; language?: string; price?: number; notes?: string;
+      };
+      map[day].push({
+        start,
+        end,
+        customer: extra.customer?.name,
+        email: extra.customer?.email,
+        phone: extra.customer?.phone,
+        language: extra.language,
+        price: extra.price,
+        notes: extra.notes,
+        room: extra.roomName,
+        linked: !!extra.roomId && String(extra.roomId) !== String(watchRoomId),
+        status: extra.status,
+        players: extra.players,
+      });
     });
     return map;
-  }, [reservations, mode, reservation?._id]);
+  }, [reservations, mode, reservation?._id, watchRoomId]);
 
   const getDayStatus = (d: Date): DayStatus => {
     const today = new Date();
@@ -375,12 +393,21 @@ useEffect(() => {
     const ymd = selectedDate.toLocaleDateString("sv-SE");
     const reserved = reservationsByDay[ymd] || [];
     setSlotOptions(
-      slots.map((s) => ({
-        ...s,
-        reserved: reserved.some((r) => overlaps(r.start, r.end, s.start, s.end)),
-      }))
+      slots.map((s) => {
+        const bookings = reserved.filter((r) => overlaps(r.start, r.end, s.start, s.end));
+        return { ...s, reserved: bookings.length > 0, bookings };
+      })
     );
   }, [selectedRoom, selectedDate, reservationsByDay]);
+
+  // Todas las reservas del día (cualquier sala) para el resumen bajo el selector
+  const blockingIds = useMemo(
+    () => new Set(reservations.map((r) => String((r as unknown as { _id: string })._id))),
+    [reservations]
+  );
+  const dayBookings = useDayBookings(selectedDate, open, watchRoomId, blockingIds).filter(
+    (b) => !(mode === "edit" && reservation?._id && b.id === String(reservation._id))
+  );
 
   const slotStart = selectedSlot?.split("-")[0];
   const selectedYmd = selectedDate?.toLocaleDateString("sv-SE");
@@ -763,6 +790,7 @@ useEffect(() => {
                       slots={slotOptions}
                       selectedSlot={selectedSlot}
                       onSelectSlot={setSelectedSlot}
+                      dayBookings={dayBookings}
                     />
                   </FormItem>
 

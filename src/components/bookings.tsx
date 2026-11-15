@@ -9,8 +9,9 @@ import { z } from "zod";
 import confetti from "canvas-confetti";
 
 import { Button } from "@/components/ui/button";
-import { SlotPicker, type DayStatus } from "@/components/reservations/slot-picker";
+import { SlotPicker, type DayStatus, type SlotBooking, type SlotOption } from "@/components/reservations/slot-picker";
 import { priceFor } from "@/lib/pricing";
+import { useDayBookings } from "@/components/reservations/use-day-bookings";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -46,7 +47,12 @@ type Room = {
   durationMinutes?: number;
   schedule?: any;
 };
-type Reservation = { start: string; end: string; players: number };
+type Reservation = {
+  start: string; end: string; players?: number;
+  // Solo llegan con sesión del CRM (el público recibe únicamente las horas)
+  roomId?: string; roomName?: string; status?: string; customer?: { name?: string; email?: string; phone?: string };
+  language?: string; price?: number; notes?: string;
+};
 
 /* ───────── Schema ───────── */
 const schema = z.object({
@@ -237,8 +243,8 @@ export default function BookingWizard({
 
   /* ───────── Transformar reservas ───────── */
   const reservationsByDay = useMemo(() => {
-    const map: Record<string, { start: string; end: string }[]> = {};
-    reservations.forEach((res) => {
+    const map: Record<string, SlotBooking[]> = {};
+    reservations.filter((res) => res.status !== "cancelada").forEach((res) => {
       const d = new Date(res.start);
       const day = d.toISOString().slice(0, 10); // YYYY-MM-DD en UTC
 
@@ -254,10 +260,23 @@ export default function BookingWizard({
       ).padStart(2, "0")}`;
 
       if (!map[day]) map[day] = [];
-      map[day].push({ start, end });
+      map[day].push({
+        start,
+        end,
+        customer: res.customer?.name,
+        email: res.customer?.email,
+        phone: res.customer?.phone,
+        language: res.language,
+        price: res.price,
+        notes: res.notes,
+        room: res.roomName,
+        linked: !!res.roomId && res.roomId !== roomId,
+        status: res.status,
+        players: res.players,
+      });
     });
     return map;
-  }, [reservations]);
+  }, [reservations, roomId]);
 
 
   const selectedRoom = rooms.find((r) => r._id === roomId);
@@ -396,16 +415,26 @@ export default function BookingWizard({
     return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
   };
 
-  const slotOptions: { start: string; end: string; reserved: boolean }[] =
+  const slotOptions: SlotOption[] =
     selectedRoom && date
-      ? getSlotsForDate(selectedRoom, date).map((s: any) => ({
-          start: s.start,
-          end: s.end,
-          reserved: (reservationsByDay[date.toLocaleDateString("sv-SE")] || []).some((r) =>
+      ? getSlotsForDate(selectedRoom, date).map((s: any) => {
+          const bookings = (reservationsByDay[date.toLocaleDateString("sv-SE")] || []).filter((r) =>
             overlaps(r.start, r.end, s.start, s.end)
-          ),
-        }))
+          );
+          return { start: s.start, end: s.end, reserved: bookings.length > 0, bookings };
+        })
       : [];
+  // Personal del CRM (con sesión): resumen de todas las reservas del día
+  const [isStaff, setIsStaff] = useState(false);
+  useEffect(() => {
+    setIsStaff(document.cookie.split("; ").some((c) => c.startsWith("session_user=")));
+  }, []);
+  const blockingIds = useMemo(
+    () => new Set(reservations.map((r) => String((r as { _id?: string })._id ?? ""))),
+    [reservations]
+  );
+  const dayBookings = useDayBookings(date, isStaff, roomId, blockingIds);
+
   const closedDayMessage = (() => {
     if (!selectedRoom || !date) return "";
     const off = selectedRoom.schedule?.daysOff?.find(
@@ -670,6 +699,7 @@ export default function BookingWizard({
                   slots={slotOptions}
                   selectedSlot={slot ? `${slot}-${slotOptions.find((s) => s.start === slot)?.end ?? endOf(slot)}` : null}
                   onSelectSlot={(v) => setSlot(v.split("-")[0])}
+                  dayBookings={dayBookings}
                   emptyState={
                     <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-amber-300/70 bg-amber-50 p-4 text-center dark:bg-amber-500/10">
                       <Phone className="size-5 text-amber-600" />
