@@ -210,12 +210,12 @@ useEffect(() => {
   if (profileLoaded && !isAdmin && (tabValue === "list" || tabValue === "history")) setTabValue("checkin");
 }, [profileLoaded, isAdmin, tabValue]);
 
-// Sincroniza el hash al cambiar de pestaña manualmente
-useEffect(() => {
-  if (tabValue) {
-    window.history.replaceState(null, "", `#${tabValue}`);
-  }
-}, [tabValue]);
+// El hash se actualiza solo al cambiar de pestaña a mano (antes un efecto lo
+// sobrescribía con "#list" al cargar y los enlaces #checkin / #history no funcionaban)
+function changeTab(value: string) {
+  setTabValue(value);
+  window.history.replaceState(null, "", `#${value}`);
+}
 
 
   /* ───── Render ───── */
@@ -233,7 +233,7 @@ useEffect(() => {
 </div>
 
     <div className="space-y-6">
-      <Tabs value={tabValue} onValueChange={setTabValue}>
+      <Tabs value={tabValue} onValueChange={changeTab}>
         <TabsList className={`grid h-auto w-full grid-cols-2 gap-1 rounded-2xl bg-white p-1.5 ${isAdmin ? "sm:grid-cols-4" : ""}`}>
           {isAdmin && <TabsTrigger className="min-h-11 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none" value="list">
             <Users className="w-4 h-4 mr-1" /> Empleados

@@ -57,9 +57,9 @@ function Brand() {
   return (
     <Link href="/dashboard" className="block px-5 pb-4 pt-6 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" aria-label="Fobia Escape Rooms y Action Gates · Inicio">
       <span className="flex items-center justify-center gap-4">
-        <img src="/brand/fobia.png" alt="Fobia Escape Rooms" className="h-auto w-[42%] max-w-[92px] object-contain" />
+        <img src="/brand/fobia.png" alt="Fobia Escape Rooms" className="h-auto w-[44%] max-w-[110px] object-contain" />
         <span className="h-9 w-px shrink-0 bg-white/20" aria-hidden="true" />
-        <img src="/brand/action-gates.svg" alt="Action Gates" className="h-auto w-[42%] max-w-[88px] object-contain" />
+        <img src="/brand/action-gates.svg" alt="Action Gates" className="h-auto w-[44%] max-w-[104px] object-contain" />
       </span>
       <span className="mt-3 block text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9298b5]">Panel de gestión</span>
     </Link>
@@ -87,7 +87,7 @@ function UserFooter({ user, onLogout, onNavigate }: { user: { name?: string; rol
         </Avatar>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-white">{user?.name || "Usuario"}</span>
-          <span className="block truncate text-xs text-[#b8bdd2]">{roleLabel(user?.role)} · Mi perfil</span>
+          <span className="block truncate text-xs text-[#b8bdd2]">{roleLabel(user?.role)}</span>
         </span>
         <UserRound className="size-4 shrink-0 text-[#9298b5]" aria-hidden="true" />
       </Link>
