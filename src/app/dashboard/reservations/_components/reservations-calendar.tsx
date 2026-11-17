@@ -39,6 +39,8 @@ type Resv = {
   coupon?: { code: string; type: "percent" | "amount"; value: number } | null;
   priceManual?: boolean;
   priceNote?: string;
+  privacy?: { accepted: boolean; at?: string | null; url?: string; source?: string } | null;
+  ranking?: { teamName?: string; score?: number | null; timeSeconds?: number | null } | null;
 
 
   
@@ -262,6 +264,8 @@ export function ReservationsCalendar({
     price: ev.price,
     priceManual: ev.priceManual,
     priceNote: ev.priceNote,
+    privacy: ev.privacy,
+    ranking: ev.ranking,
     customer: ev.customer
       ? {
           id: ev.customer.id ?? ev.customer.email,

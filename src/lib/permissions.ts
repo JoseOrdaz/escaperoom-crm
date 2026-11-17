@@ -15,6 +15,7 @@ export type Permission =
   | "reservations.notify" // avisar / escribir al cliente desde la reserva
   | "reservations.delete"
   | "reservations.price" // ajustar el precio pagado
+  | "payments.manage" // apartado de cobros y registrar pagos
   | "checkin" // fichajes y calendario laboral
   | "rooms.manage"
   | "customers.view"
@@ -39,6 +40,7 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   "reservations.notify": "Avisar y escribir al cliente",
   "reservations.delete": "Eliminar reservas",
   "reservations.price": "Ajustar el precio pagado",
+  "payments.manage": "Ver cobros y registrar pagos",
   checkin: "Fichajes y calendario laboral",
   "rooms.manage": "Gestionar salas, horarios y precios",
   "customers.view": "Ver y gestionar clientes",
@@ -84,9 +86,13 @@ export const PAGE_PERMISSION: { prefix: string; perm: Permission }[] = [
   { prefix: "/dashboard/bookings", perm: "reservations.view" },
   { prefix: "/dashboard/reservations", perm: "reservations.view" },
   { prefix: "/dashboard/emails", perm: "emails.view" },
+  { prefix: "/dashboard/payments", perm: "payments.manage" },
+  { prefix: "/dashboard/ranking", perm: "reservations.view" },
   { prefix: "/dashboard/rooms", perm: "rooms.manage" },
+  { prefix: "/dashboard/schedules", perm: "rooms.manage" },
   { prefix: "/dashboard/customers", perm: "customers.view" },
   { prefix: "/dashboard/coupons", perm: "coupons.manage" },
+  { prefix: "/dashboard/settings", perm: "rooms.manage" },
   { prefix: "/dashboard/employees", perm: "checkin" }, // dentro, las pestañas de gestión piden employees.manage
 ];
 

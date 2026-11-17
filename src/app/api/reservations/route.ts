@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { connectDB } from "@/lib/db";
 import { z } from "zod";
-import { sendLoggedEmail } from "@/lib/email-log";
+import { sendReservationEmail } from "@/lib/reservation-emails";
 import { priceFor } from "@/lib/pricing";
 import { canUseRoom, forbiddenRoom, getAccess, scopedRoomIds } from "@/lib/access";
 import { findOrCreateCustomer } from "@/lib/customers";
@@ -44,6 +44,9 @@ const postSchema = z.object({
   status: z.enum(["pendiente", "confirmada", "cancelada"]).default("pendiente"),
 
   couponCode: z.string().optional(),
+  // Aceptación de la política de privacidad (formulario público)
+  privacyAccepted: z.boolean().optional(),
+  privacyUrl: z.string().max(500).optional(),
   discountType: z.enum(["percent", "amount"]).optional(),
   discountValue: z.number().optional(),
 });
@@ -192,7 +195,11 @@ export async function GET(req: Request) {
 
     // 🌐 Sin sesión (formulario público): solo horas ocupadas de una sala concreta, sin datos de clientes
     if (!access) {
-      if (!roomId) return NextResponse.json({ ok: false, error: "Inicia sesión" }, { status: 401 });
+      // Una sala (asistente) o varias (vista semanal), como mucho 2 meses y sin datos de clientes
+      if (!roomId && !roomIdsParam) return NextResponse.json({ ok: false, error: "Inicia sesión" }, { status: 401 });
+      if (toD.getTime() - fromD.getTime() > 62 * 86400000) {
+        return NextResponse.json({ ok: false, error: "Rango demasiado largo" }, { status: 400 });
+      }
       const busy = await db
         .collection("reservations")
         .find({ ...query, status: { $ne: "cancelada" } })
@@ -230,6 +237,8 @@ export async function GET(req: Request) {
         coupon: 1,
         priceManual: 1,
         priceNote: 1,
+        privacy: 1,
+        ranking: 1,
       })
       .sort({ start: 1 })
       .toArray();
@@ -283,6 +292,8 @@ export async function GET(req: Request) {
         price: d.price ?? 0,
         priceManual: !!d.priceManual,
         priceNote: d.priceNote ?? "",
+        ranking: d.ranking ?? null,
+        privacy: d.privacy ? { accepted: !!d.privacy.accepted, at: d.privacy.at ?? null, url: d.privacy.url ?? "", source: d.privacy.source ?? "" } : null,
         language: d.language ?? "es",
         notes: d.notes ?? "",
         internalNotes: d.internalNotes ?? "",
@@ -425,6 +436,9 @@ if (v.couponCode) {
       createdAt: new Date(),
       updatedAt: new Date(),
       status: v.status,
+      ...(v.privacyAccepted
+        ? { privacy: { accepted: true, at: new Date(), url: v.privacyUrl ?? "", source: access ? "crm" : "web" } }
+        : {}),
       // 🧾 Guardar info del cupón
       ...(appliedCoupon ? { coupon: appliedCoupon } : {}),
 
@@ -433,184 +447,9 @@ if (v.couponCode) {
 
     const res = await db.collection("reservations").insertOne(doc);
 
-    // ───────── Enviar correo de notificación ─────────
-
-
+    // ───────── Correo de confirmación (plantilla "Reserva recibida", editable en Ajustes) ─────────
     try {
-      function normalizeText(text: string) {
-        return text
-          .toLowerCase()
-          .normalize("NFD") // separa acentos
-          .replace(/[\u0300-\u036f]/g, ""); // elimina acentos
-      }
-      // Detectar si la sala pertenece a Fobia o a Action Gates
-      const roomName = normalizeText(room.name);
-
-      const isFobia =
-        roomName.includes("piedra filosofal") ||
-        roomName.includes("gulliver y los gigantes") ||
-        roomName.includes("academia de houdini") ||
-        roomName.includes("casa de los fantasmas");
-
-      const [year, month, day] = v.date.split("-");
-      const fechaBonita = `${day}/${month}/${year}`;
-
-
-
-      // Datos comunes
-      let cliente = v.customerName;
-      let customerEmail = v.customerEmail;
-
-      if (v.customerId && !v.customerName) {
-        const cust = await db
-          .collection("customers")
-          .findOne(
-            { _id: safeObjectId(v.customerId) },
-            { projection: { name: 1, email: 1 } }
-          );
-
-        if (cust) {
-          cliente = cust.name;
-          if (!v.customerEmail) customerEmail = cust.email;
-        }
-      }
-      const nombreCliente = cliente?.split(" ")[0] || "jugador/a";
-
-      const fechaHora = `${fechaBonita} – ${v.start}${v.end ? " a " + v.end : ""}`;
-      const jugadores = `${v.players} jugadores`;
-      // 💸 Precio original y final (si cupón)
-      const originalPrice = Number(priceRow?.price ?? 0);
-const finalPrice = Number(price ?? 0);
-let precioHTML = `${finalPrice.toFixed(2)} €`;
-
-if (appliedCoupon) {
-  const descuento =
-    appliedCoupon.type === "percent"
-      ? `-${appliedCoupon.value}%`
-      : `-${appliedCoupon.value.toFixed(2)} €`;
-
-  precioHTML = `
-    <span style="text-decoration:line-through;color:#999;">
-      ${originalPrice.toFixed(2)} €
-    </span>
-    <strong style="color:#388e3c;"> ${finalPrice.toFixed(2)} €</strong><br/>
-    <small style="color:#388e3c;font-size:13px;">
-      Cupón aplicado: <strong>${appliedCoupon.code}</strong> (${descuento})
-    </small>
-  `;
-}
-
-
-
-
-
-
-      // 🧩 Plantillas HTML
-      const fobiaHTML = `
-  <div style="font-family:'Segoe UI',Tahoma,sans-serif;background-color:#f6f8fa;padding:30px;">
-    <div style="max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)">
-      <div style="background:linear-gradient(135deg,#3f51b5,#1a237e);color:white;padding:24px;">
-        <h1 style="margin:0;font-size:22px;">¡Hola, ${nombreCliente}!</h1>
-      </div>
-
-      <div style="padding:28px;color:#333;">
-        <p>Tu reserva en <strong>Fobia Escape Rooms Valencia</strong> está confirmada:</p>
-
-        <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-          <tr><td><strong>Sala:</strong></td><td>${room.name}</td></tr>
-          <tr><td><strong>Nº de jugadores:</strong></td><td>${jugadores}</td></tr>
-          <tr><td><strong>Fecha y hora:</strong></td><td>${fechaHora}</td></tr>
-          <tr><td><strong>Precio:</strong></td><td>${precioHTML}</td></tr>
-        </table>
-
-        <p>Se os ruega llegar 15 minutos antes de la hora reservada para rellenar documentos necesarios para la realización de la sala y explicaros las normas, evitando perder tiempo de juego.</p>
-
-        <h3 style="margin-top:24px;">📍 Nuestra ubicación</h3>
-        <p>Plaza del Portal Nuevo, 8, Ciutat Vella, 46003 Valencia</p>
-        <p><a href="https://maps.google.com/?q=Plaza+del+Portal+Nuevo,+8,+46003+Valencia" style="color:#3f51b5;">Abrir ubicación en Google Maps</a></p>
-
-        <p>En la zona no es fácil encontrar parking gratuito. Recomendamos venir con tiempo, usar transporte público o aparcar en el Parking La Torreta (a 3 minutos caminando):</p>
-        <p><a href="https://maps.google.com/?q=Parking+La+Torreta+Valencia" style="color:#3f51b5;">Abrir Parking La Torreta en Google Maps</a></p>
-
-        <p>Para esta experiencia recomendamos ropa y calzado cómodo.</p>
-
-        <h3 style="margin-top:24px;">⚠️ Atención jugadores</h3>
-        <p>Si llegáis 10 minutos tarde, el juego podría acortarse. Si llegáis más de 15 minutos tarde, podríais perder la reserva.</p>
-
-        <p>Si necesitas cancelar la reserva, hazlo con al menos 24 horas de antelación:</p>
-        <a href="https://escaperoom-crm.vercel.app/api/reservations/${res.insertedId}/cancel" style="display:inline-block;background:#3f51b5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Cancelar mi reserva</a>
-
-        <p style="margin-top:24px;">Os esperamos con mucha ilusión 💥<br/><strong>Equipo de Fobia Escape</strong></p>
-
-        <hr style="margin:30px 0;border:none;border-top:1px solid #ddd;" />
-        <p style="font-size:13px;color:#555;">📧 valencia@fobiaescape.com · 📞 +34 654 60 89 75</p>
-      </div>
-    </div>
-  </div>`;
-
-      const actionHTML = `
-  <div style="font-family:'Segoe UI',Tahoma,sans-serif;background-color:#f6f8fa;padding:30px;">
-    <div style="max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)">
-      <div style="background:linear-gradient(135deg,#00796b,#00a884);color:white;padding:24px;">
-        <h1 style="margin:0;font-size:22px;">¡Hola, ${nombreCliente}!</h1>
-      </div>
-
-      <div style="padding:28px;color:#333;">
-        <p>Tu reserva en <strong>Action Gates Skill Room Valencia</strong> está confirmada:</p>
-
-        <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-          <tr><td><strong>Misión:</strong></td><td>${room.name}</td></tr>
-          <tr><td><strong>Nº de jugadores:</strong></td><td>${jugadores}</td></tr>
-          <tr><td><strong>Fecha y hora:</strong></td><td>${fechaHora}</td></tr>
-          <tr><td><strong>Precio:</strong></td><td>${precioHTML}</td></tr>
-        </table>
-
-        <p>Se os ruega llegar 15 minutos antes de la hora reservada para rellenar documentos necesarios, explicaros las normas y evitar perder tiempo de juego.</p>
-
-        <h3 style="margin-top:24px;">📍 Nuestra ubicación</h3>
-        <p>C/ dels Centelles, 58, L'Eixample, 46006 València, Valencia</p>
-        <p><a href="https://maps.google.com/?q=Carrer+dels+Centelles+58,+Valencia" style="color:#00a884;">Abrir ubicación en Google Maps</a></p>
-
-        <p>Recomendamos venir con tiempo o usar transporte público. Hay múltiples aparcamientos de pago cercanos.</p>
-
-        <p>Para esta experiencia recomendamos ropa y calzado cómodo.</p>
-
-        <h3 style="margin-top:24px;">⚠️ Atención jugadores</h3>
-        <p>Si llegáis 10 minutos tarde, el juego podría acortarse. Si llegáis más de 15 minutos tarde, podríais perder la reserva.</p>
-
-        <p>Si necesitas cancelar la reserva, hazlo con al menos 24 horas de antelación:</p>
-        <a href="https://escaperoom-crm.vercel.app/api/reservations/${res.insertedId}/cancel" style="display:inline-block;background:#00a884;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Cancelar mi reserva</a>
-
-        <p style="margin-top:24px;">¡Nos vemos pronto para vivir una aventura inolvidable!<br/><strong>Equipo de Action Gates</strong></p>
-
-        <hr style="margin:30px 0;border:none;border-top:1px solid #ddd;" />
-        <p style="font-size:13px;color:#555;">📧 valencia@action-gates.com · 📞 +34 692 502 258</p>
-      </div>
-    </div>
-  </div>`;
-
-      // ✉️ Enviar correo según la sala
-      const htmlContent = isFobia ? fobiaHTML : actionHTML;
-      const subject = isFobia
-        ? `🔐 Tu reserva en Fobia Escape Rooms – ${room.name}`
-        : `🎯 Tu reserva en Action Gates Skill Room – ${room.name}`;
-
-      await sendLoggedEmail(db, {
-        trigger: "auto",
-        event: "created",
-        reservationId: res.insertedId,
-        customerId,
-        roomName: room.name,
-        reservationStart: doc.start,
-      }, {
-        from: isFobia
-          ? '"Fobia Escape Room" <valencia@fobiaescape.com>'
-          : '"Action Gates" <valencia@action-gates.com>',
-        to: customerEmail,
-        bcc: "joseordazsuay@gmail.com",
-        subject,
-        html: htmlContent,
-      });
+      await sendReservationEmail(db, { reservationId: res.insertedId, kind: "status", trigger: "auto", event: "created", template: "created" });
     } catch (err) {
       console.error("Error enviando correo:", err);
     }

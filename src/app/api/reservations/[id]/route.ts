@@ -204,6 +204,7 @@ let price = priceFor(room as any, body.players, body.date, body.start).price;
       internalNotes: body.internalNotes ?? "",
       updatedAt: new Date(),
       status: body.status ?? "pendiente",
+      ...rankingUpdate(body.ranking),
         ...(appliedCoupon ? { coupon: appliedCoupon } : { coupon: null }), // 👈 nuevo campo
 
     };
@@ -335,4 +336,24 @@ export async function DELETE(req: NextRequest, context: any) {
       { status: 500 }
     );
   }
+}
+
+/** Ranking del equipo: `undefined` → no se toca; `null` → se quita */
+function rankingUpdate(input: unknown) {
+  if (input === undefined) return {};
+  if (!input || typeof input !== "object") return { ranking: null };
+  const r = input as Record<string, unknown>;
+  const teamName = String(r.teamName ?? "").trim().slice(0, 80);
+  const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+  const score = num(r.score);
+  const timeSeconds = num(r.timeSeconds);
+  if (!teamName && score === null && timeSeconds === null) return { ranking: null };
+  return {
+    ranking: {
+      teamName,
+      score: score === null ? null : Math.max(0, Math.round(score)),
+      timeSeconds: timeSeconds === null ? null : Math.max(0, Math.round(timeSeconds)),
+      updatedAt: new Date(),
+    },
+  };
 }

@@ -1,5 +1,5 @@
-import BookingWizard from "@/components/bookings";
+import { StaffBookings } from "./_components/staff-bookings";
 
 export default function BookingsPage() {
-  return <BookingWizard />;
+  return <StaffBookings />;
 }

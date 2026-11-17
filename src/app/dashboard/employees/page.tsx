@@ -34,14 +34,13 @@ import {
   Pencil,
   Save,
   Building2,
-  LogIn,
-  LogOut,
   UserRound,
   ChevronLeft, ChevronRight, Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { usePathname, useSearchParams } from "next/navigation";
+import { CheckinReport } from "./_components/checkin-report";
 import { CheckinPanel } from "./_components/checkin-panel";
 import { ESCAPES } from "@/lib/permissions";
 
@@ -82,19 +81,6 @@ export default function EmployeesPage() {
 
   const [records, setRecords] = useState<any[]>([]);
   const [active, setActive] = useState<any[]>([]);
-  const [filterEmployee, setFilterEmployee] = useState("__all__");
-  const [filterDate, setFilterDate] = useState("");
-
-  const filteredRecords = records.filter((r) => {
-    const byEmployee =
-      filterEmployee === "__all__" || r.employeeId === filterEmployee;
-
-    const byDate =
-      !filterDate ||
-      new Date(r.time).toISOString().slice(0, 10) === filterDate;
-
-    return byEmployee && byDate;
-  });
 
 
 
@@ -657,95 +643,7 @@ function changeTab(value: string) {
 
         {/* ───── REGISTRO ───── */}
         <TabsContent value="history">
-          <Card>
-            <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-primary" />
-                <CardTitle>Registro de Fichajes</CardTitle>
-              </div>
-
-              {/* Filtros */}
-              <div className="flex flex-wrap gap-3">
-                {/* Filtro por empleado */}
-                <Select
-                  onValueChange={(v) => setFilterEmployee(v)}
-                  value={filterEmployee}
-                >
-                  <SelectTrigger aria-label="Filtrar por empleado" className="w-[200px]">
-                    <SelectValue placeholder="Filtrar por empleado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">Todos</SelectItem>
-                    {employees.map((e) => (
-                      <SelectItem key={e._id} value={e._id}>
-                        {e.name} {e.surname}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Filtro por fecha */}
-                <Input
-                  type="date"
-                  aria-label="Filtrar por fecha"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-[180px]"
-                />
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              {filteredRecords.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  No hay registros que coincidan con el filtro.
-                </p>
-              ) : (
-                <div className="rounded-md border overflow-hidden">
-                  <div className="bg-muted/30 text-sm font-medium px-4 py-2 flex justify-between">
-                    <span>Empleado</span>
-                    <span>Registro</span>
-                  </div>
-
-                  <div className="divide-y">
-                    {filteredRecords.map((r, i) => (
-                      <div
-                        key={i}
-                        className="flex flex-wrap items-center justify-between gap-2 px-4 py-4 text-sm hover:bg-muted/30"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-muted-foreground" />
-                          <span>
-                            {r.employee?.name} {r.employee?.surname}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          {r.type === "in" ? (
-                            <LogIn className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <LogOut className="w-4 h-4 text-red-600" />
-                          )}
-                          <span
-                            className={`font-medium ${r.type === "in" ? "text-green-700" : "text-red-700"
-                              }`}
-                          >
-                            {r.type === "in" ? "Entrada" : "Salida"}
-                          </span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock3 className="w-3 h-3" />
-                            {format(new Date(r.time), "dd/MM/yyyy HH:mm", {
-                              locale: es,
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <CheckinReport employees={employees} records={records} />
         </TabsContent>
 
 

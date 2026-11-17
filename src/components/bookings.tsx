@@ -11,6 +11,8 @@ import confetti from "canvas-confetti";
 import { Button } from "@/components/ui/button";
 import { SlotPicker, type DayStatus, type SlotBooking, type SlotOption } from "@/components/reservations/slot-picker";
 import { priceFor } from "@/lib/pricing";
+import { blockFor } from "@/lib/room-schedule";
+import { escapeOfRoom } from "@/lib/permissions";
 import { useDayBookings } from "@/components/reservations/use-day-bookings";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +48,7 @@ type Room = {
   priceTable: { players: number; price: number }[];
   durationMinutes?: number;
   schedule?: any;
+  escape?: string;
 };
 type Reservation = {
   start: string; end: string; players?: number;
@@ -71,9 +74,18 @@ export default function BookingWizard({
   roomsProp,
   roomIds,
   contactPhone,
+  preset,
+  staffDetails = false,
+  onStepChange,
 }: {
   roomsProp?: Room[];
   roomIds?: string[];
+  /** Sala, día (YYYY-MM-DD) y hora (HH:mm) ya elegidos desde la vista semanal */
+  preset?: { roomId: string; date: string; slot: string; key: number } | null;
+  /** Mostrar datos de otras reservas (nombre, teléfono…). Por defecto no: esta vista la usan los clientes */
+  staffDetails?: boolean;
+  /** Aviso al cambiar de paso (p. ej. para que la web que incrusta el iframe haga scroll) */
+  onStepChange?: (step: number) => void;
   /** Teléfono que se muestra cuando un día no admite reservas online */
   contactPhone?: string;
 }) {
@@ -110,8 +122,9 @@ export default function BookingWizard({
 
     if (room.schedule.daysOff?.some((d: any) => d.date === ymd)) return [];
     const override = room.schedule.overrides?.find((o: any) => o.date === ymd);
-    if (override) return override.slots;
-    return room.schedule.template?.[weekday] || [];
+    // Sin las franjas bloqueadas desde «Horarios y precios»
+    const base = override ? override.slots : room.schedule.template?.[weekday] || [];
+    return base.filter((s: { start: string; end: string }) => !blockFor(room.schedule.blocks, ymd, s));
   }
 
   /* ───────── Form ───────── */
@@ -126,6 +139,17 @@ export default function BookingWizard({
       acceptPrivacy: false,
     },
   });
+
+  /* ───────── Preselección desde la vista semanal ───────── */
+  useEffect(() => {
+    if (!preset) return;
+    setRoomId(preset.roomId);
+    setDate(new Date(`${preset.date}T00:00:00`));
+    setSlot(preset.slot);
+    setPlayers(null);
+    setCompletedSteps([1, 3]);
+    setStep(2);
+  }, [preset]);
 
   /* ───────── Navegación ───────── */
   const goNext = (next: number) => {
@@ -260,7 +284,7 @@ export default function BookingWizard({
       ).padStart(2, "0")}`;
 
       if (!map[day]) map[day] = [];
-      map[day].push({
+      map[day].push(!staffDetails ? { start, end } as SlotBooking : {
         start,
         end,
         customer: res.customer?.name,
@@ -276,7 +300,7 @@ export default function BookingWizard({
       });
     });
     return map;
-  }, [reservations, roomId]);
+  }, [reservations, roomId, staffDetails]);
 
 
   const selectedRoom = rooms.find((r) => r._id === roomId);
@@ -332,6 +356,8 @@ export default function BookingWizard({
           customerEmail: values.email,
           customerPhone: values.phone,
           ...(coupon ? { couponCode: coupon.code } : {}),
+          privacyAccepted: values.acceptPrivacy === true,
+          privacyUrl,
         }),
       });
 
@@ -403,6 +429,8 @@ export default function BookingWizard({
     if (typeof window !== "undefined" && window.innerWidth < 1024) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+    onStepChange?.(step);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   const fmtDate = (d: Date, opts: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long" }) => {
@@ -427,13 +455,20 @@ export default function BookingWizard({
   // Personal del CRM (con sesión): resumen de todas las reservas del día
   const [isStaff, setIsStaff] = useState(false);
   useEffect(() => {
-    setIsStaff(document.cookie.split("; ").some((c) => c.startsWith("session_user=")));
-  }, []);
+    setIsStaff(staffDetails && document.cookie.split("; ").some((c) => c.startsWith("session_user=")));
+  }, [staffDetails]);
   const blockingIds = useMemo(
     () => new Set(reservations.map((r) => String((r as { _id?: string })._id ?? ""))),
     [reservations]
   );
   const dayBookings = useDayBookings(date, isStaff, roomId, blockingIds);
+
+  // Política de privacidad del escape de la sala elegida (configurable en Ajustes)
+  const [escapeSettings, setEscapeSettings] = useState<Record<string, { privacyUrl?: string }>>({});
+  useEffect(() => {
+    fetch("/api/settings").then((r) => (r.ok ? r.json() : null)).then((j) => j?.escapes && setEscapeSettings(j.escapes)).catch(() => {});
+  }, []);
+  const privacyUrl = selectedRoom ? escapeSettings[escapeOfRoom(selectedRoom)]?.privacyUrl ?? "" : "";
 
   const closedDayMessage = (() => {
     if (!selectedRoom || !date) return "";
@@ -821,7 +856,13 @@ export default function BookingWizard({
                         </FormControl>
                         <div>
                           <FormLabel className="block text-sm font-normal leading-relaxed text-muted-foreground">
-                            Acepto la <a href="/privacidad" target="_blank" className="text-primary underline hover:text-primary/80">política de privacidad</a> y el tratamiento de mis datos para gestionar la reserva.
+                            Acepto la{" "}
+                            {privacyUrl ? (
+                              <a href={privacyUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">política de privacidad</a>
+                            ) : (
+                              "política de privacidad"
+                            )}{" "}
+                            {selectedRoom ? `de ${escapeOfRoom(selectedRoom)} ` : ""}y el tratamiento de mis datos para gestionar la reserva.
                           </FormLabel>
                           <FormMessage />
                         </div>

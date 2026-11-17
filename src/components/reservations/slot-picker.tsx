@@ -288,7 +288,7 @@ export function SlotPicker({
                           {s.start}
                         </span>
                         <span className={cn("text-[11px] tabular-nums", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                          {s.reserved ? "Ocupada" : `hasta ${s.end}`}
+                          {s.reserved ? "Reservada" : `hasta ${s.end}`}
                         </span>
                         {isSelected && <Check className="absolute right-2 top-2 size-3.5" />}
                       </button>

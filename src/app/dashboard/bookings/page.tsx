@@ -14,7 +14,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Loader2, Plus, X, Search, CalendarDays, UsersRound, Pencil, DoorOpen, List, LayoutGrid } from "lucide-react";
+import { Loader2, Plus, X, Search, CalendarDays, UsersRound, Pencil, DoorOpen, List, LayoutGrid, ShieldCheck } from "lucide-react";
 
 import ReservationModal, {
   ReservationForEdit,
@@ -39,6 +39,8 @@ type Resv = {
   price: number;
   priceManual?: boolean;
   priceNote?: string;
+  privacy?: { accepted: boolean; at?: string | null; url?: string; source?: string } | null;
+  ranking?: { teamName?: string; score?: number | null; timeSeconds?: number | null } | null;
   language: "es" | "en" | "ru";
   customer?: { id?: string; name?: string; email?: string; phone?: string };
   // description?: string;
@@ -253,6 +255,8 @@ export default function ReservationsTable() {
       price: r.price,
       priceManual: r.priceManual,
       priceNote: r.priceNote,
+      privacy: r.privacy,
+      ranking: r.ranking,
       customer: r.customer
         ? {
           id: r.customer.id,
@@ -531,7 +535,7 @@ export default function ReservationsTable() {
             </div>
           ) : <>
             <div className="space-y-3 md:hidden">{sortedRows.map((r) => { const date = new Date(r.start).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }); return <div key={r._id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><RoomThumb src={roomImage.get(r.roomId)} name={r.roomName} size="lg" /><div className="min-w-0"><p className="truncate font-semibold">{r.roomName || "Sala"}</p><p className="mt-0.5 text-sm text-muted-foreground">{date} · {hm(r.start)}–{hm(r.end)}</p></div></div><Status status={r.status} /></div><div className="mt-4 border-t pt-3 text-sm"><p className="font-medium">{r.customer?.name || "Sin cliente"}</p>{r.customer?.email && <p className="mt-1 break-all text-muted-foreground">{r.customer.email}</p>}<p className="mt-2 text-muted-foreground">{r.players} jugadores · {eur(r.price ?? 0)} · {LANGS[r.language ?? "es"]?.flag ?? ""} {r.language?.toUpperCase()}{r.coupon ? ` · ${r.coupon.code} (${r.coupon.type === "percent" ? `-${r.coupon.value}%` : `-${eur(r.coupon.value)}`})` : ""}</p></div><Button className="mt-4 w-full" size="sm" variant="outline" onClick={() => openEdit(r)}><Pencil className="size-4" /> Editar reserva</Button></div>; })}</div>
-            <div className="hidden overflow-hidden rounded-xl border md:block"><Table className="min-w-[1050px]"><TableHeader><TableRow className="hover:bg-transparent"><TableHead>Fecha y hora</TableHead><TableHead>Sala</TableHead><TableHead>Cliente</TableHead><TableHead>Jugadores</TableHead><TableHead>Precio</TableHead><TableHead>Cupón</TableHead><TableHead>Idioma</TableHead><TableHead>Estado</TableHead><TableHead className="sticky right-0 z-10 bg-[#f8f8fc] text-right">Acciones</TableHead></TableRow></TableHeader><TableBody>{sortedRows.map((r) => { const date = new Date(r.start).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }); return <TableRow key={r._id} className={r.status === "cancelada" ? "opacity-60" : undefined}><TableCell><p className="font-medium">{date}</p><p className="mt-1 text-xs text-muted-foreground">{hm(r.start)}–{hm(r.end)}</p></TableCell><TableCell><span className="flex items-center gap-3 font-medium"><RoomThumb src={roomImage.get(r.roomId)} name={r.roomName} />{r.roomName || "Sala"}</span></TableCell><TableCell><p className="font-medium">{r.customer?.name || "Sin cliente"}</p>{r.customer?.email && <p className="mt-1 text-xs text-muted-foreground">{r.customer.email}</p>}</TableCell><TableCell><span className="flex items-center gap-1.5"><UsersRound className="size-4 text-muted-foreground" />{r.players}</span></TableCell><TableCell className="font-medium tabular-nums">{eur(r.price ?? 0)}</TableCell><TableCell>{r.coupon ? <><p className="font-medium">{r.coupon.code}</p><p className="mt-1 text-xs text-muted-foreground">{r.coupon.type === "percent" ? `-${r.coupon.value}%` : `-${eur(r.coupon.value)}`}</p></> : <span className="text-muted-foreground">—</span>}</TableCell><TableCell><LangFlag lang={r.language} /></TableCell><TableCell><Status status={r.status} /></TableCell><TableCell className="sticky right-0 bg-card text-right"><Button size="sm" variant="outline" onClick={() => openEdit(r)}><Pencil className="size-4" />Editar</Button></TableCell></TableRow>; })}</TableBody></Table></div>
+            <div className="hidden overflow-hidden rounded-xl border md:block"><Table className="min-w-[1050px]"><TableHeader><TableRow className="hover:bg-transparent"><TableHead>Fecha y hora</TableHead><TableHead>Sala</TableHead><TableHead>Cliente</TableHead><TableHead>Jugadores</TableHead><TableHead>Precio</TableHead><TableHead>Cupón</TableHead><TableHead>Idioma</TableHead><TableHead>Estado</TableHead><TableHead className="sticky right-0 z-10 bg-[#f8f8fc] text-right">Acciones</TableHead></TableRow></TableHeader><TableBody>{sortedRows.map((r) => { const date = new Date(r.start).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }); return <TableRow key={r._id} className={r.status === "cancelada" ? "opacity-60" : undefined}><TableCell><p className="font-medium">{date}</p><p className="mt-1 text-xs text-muted-foreground">{hm(r.start)}–{hm(r.end)}</p></TableCell><TableCell><span className="flex items-center gap-3 font-medium"><RoomThumb src={roomImage.get(r.roomId)} name={r.roomName} />{r.roomName || "Sala"}</span></TableCell><TableCell><p className="flex items-center gap-1.5 font-medium">{r.customer?.name || "Sin cliente"}{r.privacy?.accepted && <ShieldCheck className="size-3.5 shrink-0 text-emerald-600" aria-label="Política de privacidad aceptada"><title>Política de privacidad aceptada</title></ShieldCheck>}</p>{r.customer?.email && <p className="mt-1 text-xs text-muted-foreground">{r.customer.email}</p>}</TableCell><TableCell><span className="flex items-center gap-1.5"><UsersRound className="size-4 text-muted-foreground" />{r.players}</span></TableCell><TableCell className="font-medium tabular-nums">{eur(r.price ?? 0)}</TableCell><TableCell>{r.coupon ? <><p className="font-medium">{r.coupon.code}</p><p className="mt-1 text-xs text-muted-foreground">{r.coupon.type === "percent" ? `-${r.coupon.value}%` : `-${eur(r.coupon.value)}`}</p></> : <span className="text-muted-foreground">—</span>}</TableCell><TableCell><LangFlag lang={r.language} /></TableCell><TableCell><Status status={r.status} /></TableCell><TableCell className="sticky right-0 bg-card text-right"><Button size="sm" variant="outline" onClick={() => openEdit(r)}><Pencil className="size-4" />Editar</Button></TableCell></TableRow>; })}</TableBody></Table></div>
           </>}
 
         </CardContent>

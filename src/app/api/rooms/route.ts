@@ -1,4 +1,5 @@
 // src/app/api/rooms/route.ts
+import { normBlocks } from "@/lib/room-schedule";
 import { NextResponse } from "next/server";
 import { normPriceRules } from "@/lib/pricing";
 import { ESCAPES, escapeOfRoom } from "@/lib/permissions";
@@ -174,6 +175,8 @@ export async function GET() {
           priceTable: 1,
           schedule: 1,
           escape: 1,
+          linkedRooms: 1,
+          scheduleBlocks: 1,
         }
       })
       .sort({ name: 1 })
@@ -190,7 +193,8 @@ export async function GET() {
       capacityMin: Number(d.capacityMin) || 1,
       capacityMax: Number(d.capacityMax) || 1,
       priceTable: normPriceTable(d.priceTable),
-      schedule: normSchedule(d.schedule),
+      schedule: { ...normSchedule(d.schedule), blocks: normBlocks(d.scheduleBlocks) },
+      linkedRooms: Array.isArray(d.linkedRooms) ? d.linkedRooms.map(String) : [],
     }));
 
     return NextResponse.json(result, { status: 200 });

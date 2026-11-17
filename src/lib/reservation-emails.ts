@@ -1,6 +1,7 @@
 import { ObjectId, type Db } from "mongodb";
 import { sendLoggedEmail, type EmailEvent, type EmailTrigger } from "@/lib/email-log";
 import { VENUES, isFobiaRoom } from "@/lib/venues";
+import { DEFAULT_TEMPLATES, renderTemplateEmail, type Brand, type EmailTemplate, type TemplateKey } from "@/lib/email-templates";
 
 export { VENUES, isFobiaRoom };
 
@@ -116,6 +117,20 @@ export function buildReservationEmail(i: BuildInput) {
   return { from: v.from, subject, html };
 }
 
+/** Plantilla guardada (colección `email_templates`) o la de por defecto */
+export async function loadTemplate(db: Db, brand: Brand, key: TemplateKey): Promise<EmailTemplate> {
+  const doc = await db.collection<{ _id: string } & Partial<EmailTemplate>>("email_templates").findOne({ _id: `${brand}:${key}` });
+  const base = DEFAULT_TEMPLATES[brand][key];
+  return {
+    subject: doc?.subject ?? base.subject,
+    heading: doc?.heading ?? base.heading,
+    intro: doc?.intro ?? base.intro,
+    body: doc?.body ?? base.body,
+    showDetails: doc?.showDetails ?? base.showDetails,
+    showCancelLink: doc?.showCancelLink ?? base.showCancelLink,
+  };
+}
+
 /**
  * Carga la reserva (sala, cliente) de la base de datos, construye el correo,
  * lo envía y lo registra en `email_logs`.
@@ -131,6 +146,8 @@ export async function sendReservationEmail(
     subject?: string;
     includeDetails?: boolean;
     sentBy?: { id: string; name: string } | null;
+    /** Plantilla a usar (por defecto según el evento/estado) */
+    template?: TemplateKey;
   }
 ) {
   const r = await db.collection("reservations").findOne({ _id: opts.reservationId });
@@ -139,6 +156,30 @@ export async function sendReservationEmail(
   if (!customer?.email) return { ok: false as const, error: "La reserva no tiene un cliente con email" };
   const room = await db.collection("rooms").findOne({ _id: r.roomId });
   const roomName = room?.name ?? r.roomName ?? "Sala";
+
+  // Correos de estado → plantilla editable (Ajustes → Plantillas de correo)
+  if (opts.kind === "status") {
+    const brand: Brand = isFobiaRoom(roomName) ? "fobia" : "action";
+    const key: TemplateKey =
+      opts.template ??
+      (opts.event === "created" ? "created" : r.status === "cancelada" ? "cancelled" : r.status === "confirmada" ? "confirmed" : "updated");
+    const tmail = renderTemplateEmail({
+      brand,
+      key,
+      template: await loadTemplate(db, brand, key),
+      data: {
+        reservationId: String(r._id), roomName, customerName: customer.name, start: new Date(r.start), end: new Date(r.end),
+        players: Number(r.players ?? 0), price: Number(r.price ?? 0), coupon: r.coupon ?? null,
+      },
+      message: opts.message,
+      appUrl: APP_URL,
+    });
+    return sendLoggedEmail(
+      db,
+      { trigger: opts.trigger, event: opts.event, reservationId: r._id, customerId: r.customerId, roomName, reservationStart: r.start, sentBy: opts.sentBy, message: opts.message },
+      { from: tmail.from, to: customer.email, bcc: BCC, subject: tmail.subject, html: tmail.html }
+    );
+  }
 
   const mail = buildReservationEmail({
     kind: opts.kind,

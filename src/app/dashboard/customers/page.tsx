@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import CustomerModal, { CustomerForEdit } from "@/components/customers/customer-modal";
 import { CustomerSheet } from "@/components/customers/customer-sheet";
+import { DeleteCustomerDialog } from "@/components/customers/delete-customer-dialog";
 import { cn } from "@/lib/utils";
 
 type Customer = {
@@ -196,6 +197,7 @@ export default function CustomersPage() {
               <div className="mt-3 flex gap-2">
                 <Button size="sm" className="flex-1" onClick={() => setViewing(c)}><Eye className="size-4" />Ficha</Button>
                 <Button size="sm" variant="outline" className="flex-1" onClick={() => openEdit(c)}><Pencil className="size-4" />Editar</Button>
+                <DeleteCustomerDialog customer={c} compact onDeleted={fetchCustomers} />
               </div>
             </div>
           ))}
@@ -259,9 +261,10 @@ export default function CustomersPage() {
                   <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{fmtDate(c.lastReservation)}</TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{fmtDate(c.createdAt)}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-1.5">
                       <Button size="sm" onClick={() => setViewing(c)}><Eye className="size-4" />Ficha</Button>
-                      <Button size="sm" variant="outline" onClick={() => openEdit(c)}><Pencil className="size-4" />Editar</Button>
+                      <Button size="icon" variant="outline" className="size-8" onClick={() => openEdit(c)} aria-label={`Editar a ${c.name}`} title="Editar"><Pencil className="size-4" /></Button>
+                      <DeleteCustomerDialog customer={c} compact onDeleted={() => { if (viewing?._id === c._id) setViewing(null); fetchCustomers(); }} />
                     </div>
                   </TableCell>
                 </TableRow>

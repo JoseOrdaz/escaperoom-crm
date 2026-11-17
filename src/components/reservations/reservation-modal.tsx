@@ -17,6 +17,10 @@ import {
 import { SlotPicker, type DayStatus, type SlotBooking, type SlotOption } from "@/components/reservations/slot-picker";
 import { CustomerEmailPanel } from "@/components/reservations/customer-email-panel";
 import { useDayBookings } from "@/components/reservations/use-day-bookings";
+import { DeleteReservationDialog } from "@/components/reservations/delete-reservation-dialog";
+import { blockFor, type TimeBlock } from "@/lib/room-schedule";
+import { PrivacyBadge } from "@/components/reservations/privacy-badge";
+import { RankingFields, rankingToState, rankingToBody, type RankingState } from "@/components/reservations/ranking-fields";
 import { priceFor, describeRule, type PriceRule } from "@/lib/pricing";
 import { useSession } from "@/components/session-provider";
 import { z } from "zod";
@@ -51,6 +55,7 @@ type Room = {
     template: WeekTemplate;
     daysOff: { date: string }[];
     overrides: { date: string; slots: TimeSlot[] }[];
+    blocks?: TimeBlock[];
   };
 };
 type Customer = { _id: string; name: string; email: string; phone?: string };
@@ -71,6 +76,8 @@ export type ReservationForEdit = {
   price?: number;
   priceManual?: boolean;
   priceNote?: string;
+  privacy?: { accepted: boolean; at?: string | null; url?: string; source?: string } | null;
+  ranking?: { teamName?: string; score?: number | null; timeSeconds?: number | null } | null;
 
 };
 
@@ -107,9 +114,9 @@ function getSlotsForDate(room: Room, date: Date): TimeSlot[] {
   const schedule = room.schedule ?? {};
   if (schedule.daysOff?.some((d) => d?.date === ymd)) return [];
   const ov = schedule.overrides?.find((o) => o?.date === ymd);
-  if (ov) return normSlots(ov.slots);
   const key = getDayKeyFromDate(date) as keyof WeekTemplate;
-  return normSlots(schedule?.template?.[key]);
+  // Sin las franjas bloqueadas desde «Horarios y precios»
+  return normSlots(ov ? ov.slots : schedule?.template?.[key]).filter((s) => !blockFor(schedule.blocks, ymd, s));
 }
 function priceForPlayers(room: Room, players?: number, ymd?: string, hhmm?: string) {
   return priceFor(room, players, ymd, hhmm).price;
@@ -154,6 +161,8 @@ export default function ReservationModal({
   onSaved,
   rooms: roomsProp,
   initialDate,
+  initialRoomId,
+  initialSlot,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -163,6 +172,9 @@ export default function ReservationModal({
   rooms?: Room[];
   /** YYYY-MM-DD preseleccionado al crear (p. ej. al pulsar un día del calendario) */
   initialDate?: string;
+  /** Sala y hora ("HH:mm-HH:mm") preseleccionadas al crear desde la vista semanal */
+  initialRoomId?: string;
+  initialSlot?: string;
 }) {
   const [roomsLocal, setRoomsLocal] = useState<Room[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -176,6 +188,7 @@ export default function ReservationModal({
   const [manualPriceOn, setManualPriceOn] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
   const [priceNote, setPriceNote] = useState("");
+  const [ranking, setRanking] = useState<RankingState>(rankingToState(null));
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [coupons, setCoupons] = useState<any[]>([]);
@@ -322,6 +335,7 @@ useEffect(() => {
     setManualPriceOn(!!reservation.priceManual);
     setManualPrice(reservation.price !== undefined ? String(reservation.price) : "");
     setPriceNote(reservation.priceNote ?? "");
+    setRanking(rankingToState(reservation.ranking));
 
     const start = new Date(reservation.start);
     setSelectedDate(start);
@@ -329,11 +343,11 @@ useEffect(() => {
       `${hhmmFromISO(reservation.start)}-${hhmmFromISO(reservation.end)}`
     );
   } else {
-    form.reset({ roomId: "", players: undefined, language: "es" });
+    form.reset({ roomId: initialRoomId ?? "", players: undefined, language: "es" });
     setSelectedDate(initialDate ? new Date(`${initialDate}T00:00:00`) : null);
-    setSelectedSlot(null);
+    setSelectedSlot(initialSlot ?? null);
   }
-}, [open, mode, reservation, form, customers, coupons, initialDate]);
+}, [open, mode, reservation, form, customers, coupons, initialDate, initialRoomId, initialSlot]);
 
 
 
@@ -479,6 +493,15 @@ useEffect(() => {
     sendEmail,
     ...(sendEmail && emailMessage.trim() ? { emailMessage: emailMessage.trim() } : {}),
   };
+
+  if (mode === "edit") {
+    const r = rankingToBody(ranking);
+    if (r === false) {
+      setLoading(false);
+      return toast.error("Revisa el ranking: la puntuación debe ser un número y el tiempo mm:ss");
+    }
+    body.ranking = r;
+  }
 
   if (mode === "edit" && manualPriceOn && can("reservations.price")) {
     const n = Number(String(manualPrice).replace(",", "."));
@@ -795,6 +818,7 @@ useEffect(() => {
                   </FormItem>
 
                   <div className="flex items-center gap-3 border-b pt-2 pb-4"><span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><UserRound className="size-4" /></span><div><h3 className="text-sm font-semibold">Cliente</h3><p className="text-xs text-muted-foreground">Selecciona un cliente o añade uno nuevo</p></div></div>
+                  {mode === "edit" && reservation && <PrivacyBadge privacy={reservation.privacy} />}
                   {/* Cliente */}
                   <FormField
                     control={form.control}
@@ -1006,6 +1030,8 @@ useEffect(() => {
                   
                 />
 
+                {mode === "edit" && <RankingFields value={ranking} onChange={setRanking} />}
+
                 {mode === "edit" && reservation?._id && can("reservations.notify") && (
                   <CustomerEmailPanel
                     reservationId={reservation._id}
@@ -1027,35 +1053,14 @@ useEffect(() => {
         {/* Footer fijo */}
         <DialogFooter className="border-t bg-card px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
   {mode === "edit" && reservation?._id && can("reservations.delete") && (
-    <Button
-      type="button"
-      variant="destructive"
-      size="sm"
-      onClick={async () => {
-        const confirmed = window.confirm(
-          "¿Seguro que deseas eliminar esta reserva?"
-        );
-        if (!confirmed) return;
-        const t = toast.loading("Eliminando reserva...");
-        try {
-          const res = await fetch(`/api/reservations/${reservation._id}`, {
-            method: "DELETE",
-          });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json?.error || "Error al eliminar");
-          toast.success("Reserva eliminada correctamente", { id: t });
-          onOpenChange(false);
-          onSaved?.(reservation._id);
-        } catch (e: any) {
-          toast.error("Error eliminando reserva", {
-            id: t,
-            description: e?.message,
-          });
-        }
+    <DeleteReservationDialog
+      reservationId={reservation._id}
+      customer={{ id: selectedCustomer?._id ?? reservation.customer?.id, name: selectedCustomer?.name ?? reservation.customer?.name }}
+      onDeleted={() => {
+        onOpenChange(false);
+        onSaved?.(reservation._id);
       }}
-    >
-      Eliminar
-    </Button>
+    />
   )}
 
   {formError && (

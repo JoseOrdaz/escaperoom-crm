@@ -79,22 +79,33 @@ export async function PUT(req: NextRequest, context: any) {
    DELETE → eliminar cliente
 ──────────────────────────────── */
 export async function DELETE(req: NextRequest, context: any) {
-  const auth = await requireAccess(req, "customers.view");
+  const auth = await requireAccess(req, "reservations.delete");
   if (auth.response) return auth.response;
   try {
+    const { id } = await context.params;
+    if (!/^[a-f0-9]{24}$/i.test(id)) return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
+    const _id = new ObjectId(id);
     const db = await connectDB();
-    const res = await db
-      .collection("customers")
-      .deleteOne({ _id: new ObjectId(context.params.id) });
 
-    if (res.deletedCount === 0) {
+    // ?reservations=delete → borra también sus reservas · unlink → las deja sin cliente
+    const mode = new URL(req.url).searchParams.get("reservations");
+    const count = await db.collection("reservations").countDocuments({ customerId: _id });
+    if (count > 0 && mode !== "delete" && mode !== "unlink") {
       return NextResponse.json(
-        { ok: false, error: "Cliente no encontrado" },
-        { status: 404 }
+        { ok: false, error: `El cliente tiene ${count} reservas`, reservations: count, needsChoice: true },
+        { status: 409 }
       );
     }
+    if (count > 0 && mode === "delete") await db.collection("reservations").deleteMany({ customerId: _id });
+    if (count > 0 && mode === "unlink") {
+      await db.collection("reservations").updateMany({ customerId: _id }, { $unset: { customerId: "" }, $set: { updatedAt: new Date() } });
+    }
 
-    return NextResponse.json({ ok: true });
+    const res = await db.collection("customers").deleteOne({ _id });
+    if (res.deletedCount === 0) {
+      return NextResponse.json({ ok: false, error: "Cliente no encontrado" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, reservations: count, mode: count ? mode : null });
   } catch (err: unknown) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Error" },
