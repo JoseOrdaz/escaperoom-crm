@@ -104,6 +104,8 @@ export default function BookingWizard({
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
   const [language, setLanguage] = useState<Lang>("es");
   const [submitting, setSubmitting] = useState(false);
+  /** Venimos del calendario / vista por día: día y hora ya elegidos, se salta «Fecha y hora» */
+  const [fromPreset, setFromPreset] = useState(false);
 
 
   /* ───────── Helpers ───────── */
@@ -147,6 +149,7 @@ export default function BookingWizard({
     setDate(new Date(`${preset.date}T00:00:00`));
     setSlot(preset.slot);
     setPlayers(null);
+    setFromPreset(true);
     setCompletedSteps([1, 3]);
     setStep(2);
   }, [preset]);
@@ -166,6 +169,7 @@ export default function BookingWizard({
   const resetWizard = () => {
     setStep(1);
     setCompletedSteps([]);
+    setFromPreset(false);
     setRoomId(null);
     setPlayers(null);
     setDate(null);
@@ -503,7 +507,7 @@ export default function BookingWizard({
         step: 3,
       },
       { icon: <Clock className="size-4" />, label: "Hora", value: slot ? `${slot} – ${endOf(slot)}` : undefined, step: 3 },
-      { icon: <Languages className="size-4" />, label: "Idioma", value: date ? LANGS.find((l) => l.value === language)?.label : undefined, step: 3 },
+      { icon: <Languages className="size-4" />, label: "Idioma", value: step >= 4 ? LANGS.find((l) => l.value === language)?.label : undefined, step: 4 },
     ];
     if (compact) {
       return (
@@ -698,7 +702,7 @@ export default function BookingWizard({
                         key={p.players}
                         onClick={() => {
                           setPlayers(p.players);
-                          goNext(3);
+                          goNext(fromPreset && date && slot ? 4 : 3);
                         }}
                         className={cn(
                           "flex flex-col items-center gap-0.5 rounded-2xl border bg-card px-3 py-3 text-center sm:gap-1 sm:py-5 transition-all hover:border-primary/50 hover:shadow-md focus-visible:outline-2 focus-visible:outline-primary",
@@ -749,27 +753,6 @@ export default function BookingWizard({
                   }
                 />
 
-                <div>
-                  <p className="mb-2 flex items-center gap-2 text-sm font-medium"><Languages className="size-4 text-muted-foreground" />Idioma de la partida</p>
-                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Idioma de la partida">
-                    {LANGS.map((l) => (
-                      <button
-                        type="button"
-                        key={l.value}
-                        role="radio"
-                        aria-checked={language === l.value}
-                        onClick={() => setLanguage(l.value)}
-                        className={cn(
-                          "flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
-                          language === l.value ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:border-primary/50"
-                        )}
-                      >
-                        <span aria-hidden>{l.flag}</span>{l.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="flex justify-end">
                   <Button size="lg" disabled={!date || !slot} onClick={() => goNext(4)}>
                     Continuar <ArrowRight className="size-4" />
@@ -781,7 +764,7 @@ export default function BookingWizard({
             {/* Paso 4: Datos */}
             {step === 4 && (
               <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.25 }}>
-                <BackButton to={3} />
+                <BackButton to={fromPreset ? 2 : 3} />
                 <StepHeader title="Tus datos" subtitle="Te enviaremos la confirmación por email." />
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(() => goNext(5))} className="space-y-5">
@@ -847,6 +830,27 @@ export default function BookingWizard({
                           <Button type="button" variant="outline" onClick={validateCoupon} className="h-10 shrink-0">Aplicar</Button>
                         </div>
                       )}
+                    </div>
+
+                    <div>
+                      <p className="mb-2 flex items-center gap-2 text-sm font-medium"><Languages className="size-4 text-muted-foreground" />Idioma de la partida</p>
+                      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Idioma de la partida">
+                        {LANGS.map((l) => (
+                          <button
+                            type="button"
+                            key={l.value}
+                            role="radio"
+                            aria-checked={language === l.value}
+                            onClick={() => setLanguage(l.value)}
+                            className={cn(
+                              "flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
+                              language === l.value ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:border-primary/50"
+                            )}
+                          >
+                            <span aria-hidden>{l.flag}</span>{l.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     <FormField control={form.control} name="acceptPrivacy" render={({ field }) => (
